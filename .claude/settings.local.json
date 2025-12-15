@@ -50,7 +50,9 @@
       "Bash(npx eas whoami)",
       "Bash(eas secret:create:*)",
       "Bash(eas build:*)",
-      "Bash(eas build:list:*)"
+      "Bash(eas build:list:*)",
+      "Bash(del:*)",
+      "Bash(npx expo-doctor)"
     ],
     "deny": [],
     "ask": []
