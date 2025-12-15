@@ -38,3 +38,8 @@ coverage/
 playwright-report/
 test-results/
 __tests__/e2e/*.png
+
+# Local-only files (never commit - contain credentials)
+*.local.md
+*.local.json
+!.claude/settings.local.json
