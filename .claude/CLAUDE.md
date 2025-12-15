@@ -89,10 +89,28 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Platform compatibility: All alerts work on web + mobile
 - ✅ Guest login removed: Simplified auth flow (guest players in-game only)
 
+## Environments
+
+**Two-tier setup** (industry standard for small projects):
+
+| Environment | Supabase Project | Purpose |
+|-------------|------------------|---------|
+| **Production** | `10k-prod` | Real users, live app |
+| **Development** | `10k-dev` | Testing, development |
+
+**Environment Files:**
+- `.env` – Production credentials (app uses this by default)
+- `.env.test` – Development/test credentials (tests use this)
+- `.env.example` – Template showing all required variables
+
+**See**: `.claude/DEV_PROD_GUIDE.md` for detailed migration workflow
+
 ## Quick Start
 ```bash
-npm start              # Dev server
-npm test               # Run tests
+npm start              # Dev server (uses .env → 10k-prod)
+npm test               # Unit tests (154 tests, mocked Supabase)
+npm run test:e2e       # E2E tests (Playwright browser tests)
+npm run test:all       # Run all tests
 ```
 
 **Key paths:**

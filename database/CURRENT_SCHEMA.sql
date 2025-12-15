@@ -120,26 +120,8 @@ BEGIN
   END IF;
 END $$;
 
--- Profiles constraints
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'profiles_player_type_valid'
-  ) THEN
-    ALTER TABLE profiles ADD CONSTRAINT profiles_player_type_valid
-    CHECK (player_type IN ('Registered', 'Guest'));
-  END IF;
-END $$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'profiles_registration_type_valid'
-  ) THEN
-    ALTER TABLE profiles ADD CONSTRAINT profiles_registration_type_valid
-    CHECK (registration_type IN ('Dev', 'Prod'));
-  END IF;
-END $$;
+-- Note: player_type and registration_type columns were removed from profiles table
+-- Constraints for these columns are no longer needed
 
 -- Turns constraints
 DO $$

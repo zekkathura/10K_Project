@@ -42,7 +42,8 @@
       "Bash(npx kill-port:*)",
       "Bash(npx tsc:*)",
       "Bash(npx playwright install:*)",
-      "Bash(npx playwright test:*)"
+      "Bash(npx playwright test:*)",
+      "Bash(npm run test:e2e:*)"
     ],
     "deny": [],
     "ask": []
