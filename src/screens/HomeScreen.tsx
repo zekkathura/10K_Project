@@ -148,12 +148,16 @@ export default function HomeScreen() {
           style={styles.playButtonWrapper}
           onPress={onPress}
           activeOpacity={0.85}
+          accessibilityLabel={`${label} tab`}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: active }}
         >
           <View style={[styles.playButton, active && styles.playButtonActive]}>
             <Image
               source={require('../../assets/images/play.png')}
               style={styles.playIconImage}
               resizeMode="contain"
+              accessibilityElementsHidden={true}
             />
           </View>
           <Text style={[styles.navLabelPlay, active && styles.navLabelPlayActive]}>{label}</Text>
@@ -166,11 +170,15 @@ export default function HomeScreen() {
         style={styles.navButton}
         onPress={onPress}
         activeOpacity={0.85}
+        accessibilityLabel={`${label} tab`}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: active }}
       >
         <Image
           source={source}
           style={[styles.navIcon, styleOverride, mode === 'dark' && styles.navIconTint]}
           resizeMode="contain"
+          accessibilityElementsHidden={true}
         />
         <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
       </TouchableOpacity>
@@ -186,18 +194,26 @@ export default function HomeScreen() {
           style={styles.topHeaderLogo}
           resizeMode="contain"
         />
-        <TouchableOpacity onPress={handleHeaderMenuPress} style={styles.topHeaderAction}>
+        <TouchableOpacity
+          onPress={handleHeaderMenuPress}
+          style={styles.topHeaderAction}
+          accessibilityLabel={isViewingGame ? 'Game menu' : 'Settings'}
+          accessibilityRole="button"
+          accessibilityHint={isViewingGame ? 'Open game settings menu' : 'Open app settings'}
+        >
           {isViewingGame ? (
             <Image
               source={require('../../assets/images/Settings_InGame.png')}
               style={[styles.topHeaderIcon, mode === 'dark' && styles.topHeaderIconTint]}
               resizeMode="contain"
+              accessibilityElementsHidden={true}
             />
           ) : (
             <Image
               source={require('../../assets/images/settingHorizontal.png')}
               style={[styles.topHeaderIcon, mode === 'dark' && styles.topHeaderIconTint]}
               resizeMode="contain"
+              accessibilityElementsHidden={true}
             />
           )}
         </TouchableOpacity>

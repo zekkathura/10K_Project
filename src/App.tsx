@@ -9,6 +9,7 @@ import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import * as WebBrowser from 'expo-web-browser';
 import { ThemeProvider, useTheme, useThemedStyles, Theme } from './lib/theme';
+import { logger } from './lib/logger';
 
 const REMEMBER_ME_KEY = '10k-remember-me';
 
@@ -110,7 +111,7 @@ export default function App() {
     // On error/timeout, assume profile exists and proceed (don't block login)
     const checkProfile = async (user: User): Promise<ProfileCheckResult> => {
       try {
-        console.log('checkProfile called for:', { userId: user.id, email: user.email });
+        logger.debug('checkProfile called');
 
         // Quick timeout - if slow, just proceed (assume profile exists)
         const timeoutPromise = new Promise<{ data: null; error: null; timedOut: true }>((resolve) =>
@@ -128,32 +129,32 @@ export default function App() {
         const result = await Promise.race([profilePromise, timeoutPromise]);
 
         if (result.timedOut) {
-          console.log('Profile check timed out, proceeding anyway');
+          logger.debug('Profile check timed out, proceeding anyway');
           return 'ok'; // Assume profile exists, don't block login
         }
 
-        console.log('Profile check result:', { existingProfile: result.data, checkError: result.error });
+        logger.debug('Profile check result:', { hasProfile: !!result.data, hasError: !!result.error });
 
         if (result.error) {
-          console.error('Profile check error:', result.error);
+          logger.error('Profile check error', result.error);
           return 'ok'; // On error, proceed anyway - don't block login
         }
 
         if (!result.data) {
-          console.log('No profile found, needs setup for:', user.email);
+          logger.debug('No profile found, needs setup');
           return 'needs_setup';
         }
 
         return 'ok';
       } catch (err) {
-        console.error('Error checking profile:', err);
+        logger.error('Error checking profile', err);
         return 'ok'; // On error, proceed anyway - don't block login
       }
     };
 
     // Listen for auth changes first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state changed:', _event, session?.user?.email);
+      logger.debug('Auth state changed:', _event);
 
       // Check profile when user signs in
       if (_event === 'SIGNED_IN' && session?.user) {
@@ -181,12 +182,12 @@ export default function App() {
     // Get initial session (this will process URL hash on web)
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (error) {
-        console.error('Error getting session:', error);
+        logger.error('Error getting session', error);
         setSession(null);
         setLoading(false);
         return;
       }
-      console.log('Initial session:', session?.user?.email);
+      logger.debug('Initial session:', session ? 'authenticated' : 'none');
 
       // Check "remember me" preference - if false, clear any RESTORED session on app load
       // But don't clear if this is a fresh login (OAuth callback with access_token in URL)
@@ -198,17 +199,17 @@ export default function App() {
           try {
             const rememberMeValue = await AsyncStorage.getItem(REMEMBER_ME_KEY);
             if (rememberMeValue === 'false') {
-              console.log('Remember me is disabled, clearing restored session');
+              logger.debug('Remember me is disabled, clearing restored session');
               await supabase.auth.signOut();
               setSession(null);
               setLoading(false);
               return;
             }
           } catch (err) {
-            console.error('Error checking remember me preference:', err);
+            logger.error('Error checking remember me preference', err);
           }
         } else {
-          console.log('Fresh OAuth login detected, skipping remember me check');
+          logger.debug('Fresh OAuth login detected, skipping remember me check');
           // Clear the ref after first use so subsequent page loads don't skip the check
           isOAuthCallbackRef.current = false;
         }
@@ -243,7 +244,7 @@ export default function App() {
     // Handle deep links
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
-      console.log('Deep link received:', url);
+      logger.debug('Deep link received');
 
       // Parse URL to extract game code
       const gameCode = extractGameCode(url);
@@ -294,7 +295,7 @@ export default function App() {
       const code = urlObj.searchParams.get('code');
       return code?.toUpperCase() || null;
     } catch (error) {
-      console.error('Error parsing URL:', error);
+      logger.error('Error parsing URL', error);
       return null;
     }
   };
@@ -324,7 +325,7 @@ export default function App() {
         `Found game ${gameCode}. You can now join from the home screen.`
       );
     } catch (error) {
-      console.error('Error checking game:', error);
+      logger.error('Error checking game', error);
       Alert.alert('Error', 'Failed to verify game code. Please try again.');
     }
   };
@@ -395,7 +396,7 @@ export default function App() {
         });
 
       if (error) {
-        console.error('Failed to create profile:', error);
+        logger.error('Failed to create profile', error);
         const alertMsg = 'Failed to create profile. Please try again.';
         if (Platform.OS === 'web') {
           window.alert(alertMsg);
@@ -405,13 +406,13 @@ export default function App() {
         return;
       }
 
-      console.log('Profile created successfully for:', pendingUser.email);
+      logger.debug('Profile created successfully');
       // Clear setup state - user can now proceed to home
       setNeedsProfileSetup(false);
       setPendingUser(null);
       setNewDisplayName('');
     } catch (err) {
-      console.error('Error creating profile:', err);
+      logger.error('Error creating profile', err);
       const alertMsg = 'An error occurred. Please try again.';
       if (Platform.OS === 'web') {
         window.alert(alertMsg);

@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "start:test": "dotenv -e .env.test.app -- expo start --port 8082 --clear",
+    "start:test": "dotenv -v TEST_ENV=dev -e .env.test.app -- expo start --port 8082 --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -12,11 +12,17 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest --testPathPattern='unit'",
+    "test:security": "jest --testPathPattern='security'",
+    "test:a11y": "jest --testPathPattern='accessibility'",
     "test:e2e": "npx playwright test --project=chromium",
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:headed": "npx playwright test --headed",
     "test:e2e:dev": "npx playwright test --project=dev-chromium",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:e2e:responsive": "npx playwright test __tests__/e2e/responsive.test.ts --project=chromium",
+    "test:e2e:theme": "npx playwright test __tests__/e2e/theme.test.ts --project=dev-chromium",
+    "test:compliance": "npm run test:security && npm run test:a11y",
+    "test:all": "npm run test && npm run test:e2e",
+    "test:all:full": "npm run test && npm run test:e2e:dev && npm run test:e2e:responsive"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -66,7 +72,9 @@
       "!**/jest.setup.js"
     ],
     "testMatch": [
-      "**/__tests__/unit/**/*.test.{ts,tsx}"
+      "**/__tests__/unit/**/*.test.{ts,tsx}",
+      "**/__tests__/security/**/*.test.{ts,tsx}",
+      "**/__tests__/accessibility/**/*.test.{ts,tsx}"
     ],
     "moduleFileExtensions": [
       "ts",

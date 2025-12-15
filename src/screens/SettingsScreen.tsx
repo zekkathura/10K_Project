@@ -160,7 +160,12 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.menuLabel}>Menu</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.closeButton}
+          accessibilityLabel="Close settings"
+          accessibilityRole="button"
+        >
           <Text style={styles.closeButtonText}>×</Text>
         </TouchableOpacity>
       </View>
@@ -172,6 +177,10 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
             style={styles.themeRow}
             onPress={() => setIsThemeMenuOpen((open) => !open)}
             activeOpacity={0.8}
+            accessibilityLabel={`Theme: ${mode === 'light' ? 'Light mode' : 'Dark mode'}`}
+            accessibilityRole="button"
+            accessibilityHint="Tap to change theme"
+            accessibilityState={{ expanded: isThemeMenuOpen }}
           >
             <View>
               <Text style={styles.label}>Theme</Text>
@@ -181,7 +190,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           </TouchableOpacity>
 
           {isThemeMenuOpen && (
-            <View style={styles.dropdown}>
+            <View style={styles.dropdown} accessibilityRole="menu">
               {(mode === 'dark' ? (['dark', 'light'] as ThemeMode[]) : (['light', 'dark'] as ThemeMode[])).map((option) => (
                 <TouchableOpacity
                   key={option}
@@ -190,6 +199,9 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
                     mode === option && styles.dropdownOptionActive,
                   ]}
                   onPress={() => handleThemeSelect(option)}
+                  accessibilityLabel={option === 'light' ? 'Light mode' : 'Dark mode'}
+                  accessibilityRole="menuitem"
+                  accessibilityState={{ selected: mode === option }}
                 >
                   <View style={styles.dropdownRow}>
                     <Text
@@ -228,6 +240,8 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
             placeholder="Enter display name"
             autoCapitalize="words"
             maxLength={50}
+            accessibilityLabel="Display name"
+            accessibilityHint="Your name shown to other players"
           />
 
           {hasChanges && (
@@ -235,6 +249,8 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={handleCancel}
+                accessibilityLabel="Cancel changes"
+                accessibilityRole="button"
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -243,6 +259,9 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
                 style={[styles.applyButton, saving && styles.applyButtonDisabled]}
                 onPress={handleSave}
                 disabled={saving}
+                accessibilityLabel="Apply changes"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: saving }}
               >
                 {saving ? (
                   <ThemedLoader mode="inline" color="#fff" size="small" />
@@ -258,6 +277,9 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           <TouchableOpacity
             style={styles.signOutButton}
             onPress={onSignOut}
+            accessibilityLabel="Sign out"
+            accessibilityRole="button"
+            accessibilityHint="Sign out of your account"
           >
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>

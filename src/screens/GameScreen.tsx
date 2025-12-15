@@ -654,6 +654,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
           style={[styles.cell, styles.playerCell]}
           onPress={() => openCell(player, round, 'score')}
           disabled={!isGameActive}
+          accessibilityLabel={`${getDisplayName(player)}, round ${round}, no score`}
+          accessibilityRole="button"
+          accessibilityHint="Tap to add score"
+          accessibilityState={{ disabled: !isGameActive }}
         >
           <Text style={styles.cellText}>-</Text>
         </TouchableOpacity>
@@ -669,6 +673,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
           onPress={() => openCell(player, round, 'edit')}
           onLongPress={() => openCell(player, round, 'delete')}
           disabled={!isGameActive}
+          accessibilityLabel={`${getDisplayName(player)}, round ${round}, bust ${turn.score}`}
+          accessibilityRole="button"
+          accessibilityHint="Tap to edit, long press to delete"
+          accessibilityState={{ disabled: !isGameActive }}
         >
           <Text style={[styles.cellText, styles.bustText, styles.strikethrough]}>{turn.score}</Text>
         </TouchableOpacity>
@@ -682,6 +690,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         onPress={() => openCell(player, round, 'edit')}
         onLongPress={() => openCell(player, round, 'delete')}
         disabled={!isGameActive}
+        accessibilityLabel={`${getDisplayName(player)}, round ${round}, score ${turn.score}`}
+        accessibilityRole="button"
+        accessibilityHint="Tap to edit, long press to delete"
+        accessibilityState={{ disabled: !isGameActive }}
       >
         <Text style={styles.cellText}>{turn.score}</Text>
       </TouchableOpacity>
@@ -740,6 +752,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     activeOpacity={p.is_guest && game?.status === 'active' ? 0.7 : 1}
                     onPress={() => openRenameGuest(p)}
                     disabled={game?.status !== 'active'}
+                    accessibilityLabel={`Player ${getDisplayName(p)}${p.is_guest ? ', guest' : ''}`}
+                    accessibilityRole="button"
+                    accessibilityHint={p.is_guest ? 'Tap to rename guest' : ''}
                   >
                     <Text style={styles.headerText} numberOfLines={2}>
                       {getDisplayName(p)}
@@ -758,6 +773,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     <TouchableOpacity
                       style={[styles.cell, styles.roundCell, { width: roundColWidth }]}
                       onPress={() => deleteWholeRound(round)}
+                      accessibilityLabel={`Round ${round}`}
+                      accessibilityRole="button"
+                      accessibilityHint="Tap to delete entire round"
                     >
                       <Text style={styles.roundText}>{round}</Text>
                     </TouchableOpacity>
@@ -798,6 +816,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
               >
                 <Text style={styles.closeX}>×</Text>
               </TouchableOpacity>
@@ -830,6 +850,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     setScoreInput(digitsOnly);
                   }
                 }}
+                accessibilityLabel="Score input"
+                accessibilityHint="Enter score value, must be multiple of 50"
               />
               <View style={styles.inputErrorContainer}>
                 {Number(scoreInput || '0') > 20000 ? (
@@ -841,7 +863,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             </View>
 
             {/* Quick add buttons */}
-            <View style={styles.quickScoreRow}>
+            <View style={styles.quickScoreRow} accessibilityRole="toolbar">
               {[50, 100, 250, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`add-${amount}`}
@@ -852,6 +874,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     setScoreInput(String(newScore));
                     setIsBust(false);
                   }}
+                  accessibilityLabel={`Add ${amount}`}
+                  accessibilityRole="button"
                 >
                   <Text style={styles.quickScoreTextAdd}>+{amount}</Text>
                 </TouchableOpacity>
@@ -859,7 +883,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             </View>
 
             {/* Quick subtract buttons */}
-            <View style={styles.quickScoreRow}>
+            <View style={styles.quickScoreRow} accessibilityRole="toolbar">
               {[50, 100, 250, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`sub-${amount}`}
@@ -870,6 +894,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     setScoreInput(String(newScore));
                     setIsBust(false);
                   }}
+                  accessibilityLabel={`Subtract ${amount}`}
+                  accessibilityRole="button"
                 >
                   <Text style={styles.quickScoreTextSub}>-{amount}</Text>
                 </TouchableOpacity>
@@ -895,6 +921,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
+                accessibilityLabel="Reset score"
+                accessibilityRole="button"
               >
                 <Text style={styles.modalButtonText}>Reset</Text>
               </TouchableOpacity>
@@ -911,6 +939,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   const scoreValue = scoreInput.trim().length === 0 ? '0' : scoreInput;
                   saveScore({ score: scoreValue, bust: true });
                 }}
+                accessibilityLabel="Mark as bust"
+                accessibilityRole="button"
               >
                 <Text style={styles.modalButtonText}>Bust</Text>
               </TouchableOpacity>
@@ -926,6 +956,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   saveScore();
                 }}
                 disabled={!applyHasChange || (hasScoreInput && parsedScoreInput > 20000)}
+                accessibilityLabel="Apply score"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !applyHasChange || (hasScoreInput && parsedScoreInput > 20000) }}
               >
                 <Text style={styles.modalButtonText}>Apply</Text>
               </TouchableOpacity>
@@ -945,6 +978,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setRenamePlayer(null);
                   setRenameInput('');
                 }}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
               >
                 <Text style={styles.closeX}>×</Text>
               </TouchableOpacity>
@@ -954,9 +989,16 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               placeholder="Guest name"
               value={renameInput}
               onChangeText={setRenameInput}
+              accessibilityLabel="Guest name"
+              accessibilityHint="Enter new name for guest player"
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleRenameGuest}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleRenameGuest}
+                accessibilityLabel="Apply name change"
+                accessibilityRole="button"
+              >
                 <Text style={styles.modalButtonText}>Apply</Text>
               </TouchableOpacity>
             </View>
@@ -987,7 +1029,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
           <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Verify scores</Text>
-              <TouchableOpacity onPress={() => setShowFinishConfirm(false)}>
+              <TouchableOpacity
+                onPress={() => setShowFinishConfirm(false)}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+              >
                 <Text style={styles.closeX}>X</Text>
               </TouchableOpacity>
             </View>
@@ -1079,6 +1125,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                       key={`winner-${p.id}`}
                       style={[styles.winnerOption, selected && styles.winnerOptionSelected]}
                       onPress={() => setSelectedWinnerId(selected ? null : p.id)}
+                      accessibilityLabel={`${getDisplayName(p)}, ${totals[p.id]} points`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
                     >
                       <Text style={[styles.winnerName, selected && styles.winnerNameSelected]}>
                         {getDisplayName(p)} ({totals[p.id]})
@@ -1100,6 +1149,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                 ]}
                 onPress={handleFinishGame}
                 disabled={finishing || !selectedWinnerId}
+                accessibilityLabel={finishing ? 'Finishing game' : 'Confirm and finish game'}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: finishing || !selectedWinnerId }}
               >
                 <Text style={styles.modalButtonText}>{finishing ? 'Finishing...' : 'OK'}</Text>
               </TouchableOpacity>

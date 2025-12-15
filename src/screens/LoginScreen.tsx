@@ -19,6 +19,7 @@ import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
 import { signInWithGoogle } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 const REMEMBER_ME_KEY = '10k-remember-me';
 
@@ -133,11 +134,7 @@ export default function LoginScreen() {
                              user.email?.split('@')[0] ||
                              'User';
 
-          console.log('Creating profile with:', {
-            id: user.id,
-            email: user.email,
-            display_name: displayName,
-          });
+          logger.debug('Creating profile for Google OAuth user');
 
           const { error: profileError } = await supabase
             .from('profiles')
@@ -148,17 +145,16 @@ export default function LoginScreen() {
             });
 
           if (profileError) {
-            console.error('Profile creation error:', profileError);
-            console.error('Error details:', JSON.stringify(profileError, null, 2));
-            showAlert('Profile Error', `Failed to create profile: ${profileError.message}`);
+            logger.error('Profile creation error', profileError);
+            showAlert('Profile Error', 'Failed to create profile. Please try again.');
           } else {
-            console.log('Profile created successfully');
+            logger.debug('Profile created successfully');
           }
         }
       }
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred');
-      console.error(error);
+      logger.error('Google sign-in error', error);
     } finally {
       setLoading(false);
     }
@@ -227,11 +223,7 @@ export default function LoginScreen() {
 
       // Create profile with display_name
       if (data.user) {
-        console.log('Creating profile for email signup:', {
-          id: data.user.id,
-          email: trimmedEmail,
-          display_name: trimmedDisplayName,
-        });
+        logger.debug('Creating profile for email signup');
 
         const { error: profileError } = await supabase
           .from('profiles')
@@ -242,11 +234,10 @@ export default function LoginScreen() {
           });
 
         if (profileError) {
-          console.error('Profile creation error:', profileError);
-          console.error('Error details:', JSON.stringify(profileError, null, 2));
-          showAlert('Profile Error', `Profile creation failed: ${profileError.message}. You may need to set your display name in Settings.`);
+          logger.error('Profile creation error', profileError);
+          showAlert('Profile Error', 'Profile creation failed. You may need to set your display name in Settings.');
         } else {
-          console.log('Profile created successfully for email signup');
+          logger.debug('Profile created successfully for email signup');
         }
       }
 
@@ -325,6 +316,9 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={styles.tab}
                 onPress={() => switchMode('signin')}
+                accessibilityLabel="Sign in tab"
+                accessibilityRole="tab"
+                accessibilityState={{ selected: mode === 'signin' }}
               >
                 <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
                   SIGN IN
@@ -334,6 +328,9 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={styles.tab}
                 onPress={() => switchMode('signup')}
+                accessibilityLabel="Sign up tab"
+                accessibilityRole="tab"
+                accessibilityState={{ selected: mode === 'signup' }}
               >
                 <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
                   SIGN UP
@@ -356,6 +353,8 @@ export default function LoginScreen() {
                 placeholderTextColor={styles.inputPlaceholder.color}
                 onFocus={() => setEmailFocused(true)}
                 onBlur={() => setEmailFocused(false)}
+                accessibilityLabel="Email address"
+                accessibilityHint="Enter your email address"
               />
 
               {mode === 'signup' && (
@@ -371,6 +370,8 @@ export default function LoginScreen() {
                     placeholderTextColor={styles.inputPlaceholder.color}
                     onFocus={() => setDisplayNameFocused(true)}
                     onBlur={() => setDisplayNameFocused(false)}
+                    accessibilityLabel="Display name"
+                    accessibilityHint="Enter your display name for the app"
                   />
                 </>
               )}
@@ -389,8 +390,15 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
+                  accessibilityLabel="Password"
+                  accessibilityHint="Enter your password"
                 />
-                <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  accessibilityRole="button"
+                >
                   <Image
                     source={
                       showPassword
@@ -419,10 +427,14 @@ export default function LoginScreen() {
                       autoCorrect={false}
                       onFocus={() => setConfirmPasswordFocused(true)}
                       onBlur={() => setConfirmPasswordFocused(false)}
+                      accessibilityLabel="Confirm password"
+                      accessibilityHint="Re-enter your password to confirm"
                     />
                     <TouchableOpacity
                       style={styles.eyeButton}
                       onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      accessibilityRole="button"
                     >
                       <Image
                         source={
@@ -440,13 +452,24 @@ export default function LoginScreen() {
 
               {mode === 'signin' && (
                 <View style={styles.inlineRow}>
-                  <TouchableOpacity style={styles.rememberRow} onPress={() => persistRememberMe(!rememberMe)}>
+                  <TouchableOpacity
+                    style={styles.rememberRow}
+                    onPress={() => persistRememberMe(!rememberMe)}
+                    accessibilityLabel="Remember me"
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: rememberMe }}
+                  >
                     <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                       {rememberMe && <Text style={styles.checkboxMark}>✓</Text>}
                     </View>
                     <Text style={styles.rememberText}>Remember me</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleForgotPassword}>
+                  <TouchableOpacity
+                    onPress={handleForgotPassword}
+                    accessibilityLabel="Forgot password"
+                    accessibilityRole="button"
+                    accessibilityHint="Send a password reset email"
+                  >
                     <Text style={styles.forgotText}>Forgot password?</Text>
                   </TouchableOpacity>
                 </View>
@@ -456,6 +479,9 @@ export default function LoginScreen() {
                 style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
                 onPress={onSubmit}
                 disabled={loading}
+                accessibilityLabel={mode === 'signin' ? 'Log in' : 'Sign up'}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: loading }}
               >
                 {loading ? (
                   <ThemedLoader mode="inline" color={styles.primaryButtonText.color} />
@@ -473,7 +499,14 @@ export default function LoginScreen() {
               <View style={styles.separatorLine} />
             </View>
 
-            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={loading}>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+              accessibilityLabel="Continue with Google"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: loading }}
+            >
               {loading ? (
                 <ThemedLoader mode="inline" color={styles.googleButtonText.color} />
               ) : (
@@ -482,6 +515,7 @@ export default function LoginScreen() {
                     source={require('../../assets/images/google_logo.png')}
                     style={styles.buttonLogo}
                     resizeMode="contain"
+                    accessibilityElementsHidden={true}
                   />
                   <Text style={styles.googleButtonText}>Continue with Google</Text>
                 </>

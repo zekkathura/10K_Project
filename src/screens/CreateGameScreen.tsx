@@ -207,7 +207,11 @@ export default function CreateGameScreen({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Create New Game</Text>
-        <TouchableOpacity onPress={onCancel}>
+        <TouchableOpacity
+          onPress={onCancel}
+          accessibilityLabel="Cancel game creation"
+          accessibilityRole="button"
+        >
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -229,6 +233,10 @@ export default function CreateGameScreen({
                 isCurrentUser && styles.userRowCurrent,
               ]}
               onPress={() => toggleUser(item.id)}
+              accessibilityLabel={`${displayName}${isCurrentUser ? ', you' : ''}`}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSelected }}
+              accessibilityHint={isSelected ? 'Tap to remove from game' : 'Tap to add to game'}
             >
               <View>
                 <Text style={styles.userName}>
@@ -262,8 +270,15 @@ export default function CreateGameScreen({
             value={guestName}
             onChangeText={setGuestName}
             onSubmitEditing={addGuestPlayer}
+            accessibilityLabel="Guest player name"
+            accessibilityHint="Enter a name for a guest player"
           />
-          <TouchableOpacity style={styles.addButton} onPress={addGuestPlayer}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={addGuestPlayer}
+            accessibilityLabel="Add guest player"
+            accessibilityRole="button"
+          >
             <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
@@ -271,7 +286,11 @@ export default function CreateGameScreen({
         {guestPlayers.map((name, index) => (
           <View key={index} style={styles.guestRow}>
             <Text style={styles.guestName}>{name} (Guest)</Text>
-            <TouchableOpacity onPress={() => removeGuestPlayer(index)}>
+            <TouchableOpacity
+              onPress={() => removeGuestPlayer(index)}
+              accessibilityLabel={`Remove ${name}`}
+              accessibilityRole="button"
+            >
               <Text style={styles.removeText}>Remove</Text>
             </TouchableOpacity>
           </View>
@@ -282,6 +301,9 @@ export default function CreateGameScreen({
         style={[styles.createButton, creating && styles.createButtonDisabled]}
         onPress={handleCreateGame}
         disabled={creating}
+        accessibilityLabel={`Start game with ${selectedUserIds.size + guestPlayers.length} players`}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: creating }}
       >
         {creating ? (
           <ThemedLoader mode="inline" color="#fff" />

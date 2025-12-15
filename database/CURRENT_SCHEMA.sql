@@ -50,8 +50,7 @@ CREATE TABLE IF NOT EXISTS game_players (
   is_on_board BOOLEAN DEFAULT false,
   total_score INTEGER DEFAULT 0,
   display_order INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Turns table (individual scores)
@@ -63,15 +62,39 @@ CREATE TABLE IF NOT EXISTS turns (
   score INTEGER DEFAULT 0,
   is_bust BOOLEAN DEFAULT false,
   is_closed BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- App config table (version checking, maintenance mode)
+CREATE TABLE IF NOT EXISTS app_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Extra rules table (house rules)
+CREATE TABLE IF NOT EXISTS extra_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rule_number INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  proposer TEXT,
+  approved_by TEXT,
+  revoked_by TEXT,
+  rule_date DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_extra_rules_rule_number ON extra_rules(rule_number);
 
 -- Enable RLS on all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extra_rules ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- CONSTRAINTS
@@ -490,6 +513,89 @@ USING (
 );
 
 -- ============================================================================
+-- RLS POLICIES - APP_CONFIG TABLE
+-- ============================================================================
+
+-- Anyone can read app config
+DROP POLICY IF EXISTS "Anyone can read app config" ON app_config;
+CREATE POLICY "Anyone can read app config"
+ON app_config FOR SELECT
+TO anon, authenticated
+USING (true);
+
+-- ============================================================================
+-- RLS POLICIES - EXTRA_RULES TABLE
+-- ============================================================================
+
+-- Authenticated users can read extra rules
+DROP POLICY IF EXISTS "extra_rules_select_authenticated" ON extra_rules;
+CREATE POLICY "extra_rules_select_authenticated"
+ON extra_rules FOR SELECT
+TO authenticated
+USING (true);
+
+-- ============================================================================
+-- BYPASS POLICIES (for data import scripts)
+-- ============================================================================
+
+-- game_players bypass
+DROP POLICY IF EXISTS "authenticated_all_game_players" ON game_players;
+CREATE POLICY "authenticated_all_game_players"
+ON game_players FOR ALL TO authenticated
+USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "service_role_all_game_players" ON game_players;
+CREATE POLICY "service_role_all_game_players"
+ON game_players FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- games bypass
+DROP POLICY IF EXISTS "authenticated_all_games" ON games;
+CREATE POLICY "authenticated_all_games"
+ON games FOR ALL TO authenticated
+USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "service_role_all_games" ON games;
+CREATE POLICY "service_role_all_games"
+ON games FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- turns bypass
+DROP POLICY IF EXISTS "authenticated_all_turns" ON turns;
+CREATE POLICY "authenticated_all_turns"
+ON turns FOR ALL TO authenticated
+USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "service_role_all_turns" ON turns;
+CREATE POLICY "service_role_all_turns"
+ON turns FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- ============================================================================
+-- ADDITIONAL PROFILE POLICIES
+-- ============================================================================
+
+DROP POLICY IF EXISTS "Authenticated users can insert own profile" ON profiles;
+CREATE POLICY "Authenticated users can insert own profile"
+ON profiles FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Authenticated users can view all profiles" ON profiles;
+CREATE POLICY "Authenticated users can view all profiles"
+ON profiles FOR SELECT TO authenticated
+USING (true);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile"
+ON profiles FOR INSERT TO public
+WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can select own profile by id" ON profiles;
+CREATE POLICY "Users can select own profile by id"
+ON profiles FOR SELECT TO authenticated
+USING (auth.uid() = id);
+
+-- ============================================================================
 -- INDEXES (Optional - for performance)
 -- ============================================================================
 
@@ -508,6 +614,19 @@ COMMENT ON TABLE profiles IS 'User profiles - RLS enabled';
 COMMENT ON TABLE games IS 'Game records - RLS enabled';
 COMMENT ON TABLE game_players IS 'Game player associations - RLS enabled';
 COMMENT ON TABLE turns IS 'Game turn records - RLS enabled';
+COMMENT ON TABLE app_config IS 'App configuration - version checking, maintenance mode';
+COMMENT ON TABLE extra_rules IS 'House rules - authenticated read, admin write';
+
+-- ============================================================================
+-- DEFAULT DATA
+-- ============================================================================
+
+INSERT INTO app_config (key, value, description) VALUES
+('min_app_version', '1.0.0', 'Minimum app version required'),
+('force_update', 'false', 'If true, users must update'),
+('maintenance_mode', 'false', 'If true, shows maintenance message'),
+('maintenance_message', 'The app is currently under maintenance.', 'Message shown during maintenance')
+ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================================
 -- END OF SCHEMA

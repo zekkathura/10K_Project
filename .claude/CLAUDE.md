@@ -17,6 +17,7 @@ Expo SDK 54 (React Native Web) + TypeScript + Supabase (Postgres/Auth/Realtime)
 - `games` (join codes, rounds, winner tracking, status)
 - `game_players` (user + guest players per game)
 - `turns` (scores, busts, per round)
+- `app_config` (version requirements, maintenance mode)
 
 **Why We Maintain Verification Scripts:**
 AI assistants lack direct database access. To prevent recommending changes incompatible with actual backend structure, we maintain reference files (`.claude/*.md`) that mirror live database state. User runs verification scripts in Supabase and shares output to keep AI synchronized with reality.
@@ -40,6 +41,7 @@ When debugging auth/permission issues or after policy changes:
 - `src/lib/database.ts` – all DB operations (prefer these functions over raw Supabase queries)
 - `src/lib/validation.ts` – input validators (always use before DB ops)
 - `src/lib/theme.ts` – dark/light theme system
+- `src/lib/versionCheck.ts` – app version checking against backend requirements
 - `src/screens/GameScreen.tsx` – main game logic, realtime sync
 
 ## Guest Players & Data Migration
@@ -103,7 +105,17 @@ When debugging auth/permission issues or after policy changes:
 - `.env.test` – Development/test credentials (tests use this)
 - `.env.example` – Template showing all required variables
 
-**See**: `.claude/DEV_PROD_GUIDE.md` for detailed migration workflow
+**Build Configuration:**
+- `app.config.js` – Dynamic Expo config (version, package names per environment)
+- `eas.json` – EAS Build profiles (development, preview, production)
+
+**Production Builds:**
+```bash
+eas build --profile production --platform android  # Google Play AAB
+eas build --profile production --platform ios      # App Store
+```
+
+**See**: `.claude/DEV_PROD_GUIDE.md` for detailed migration workflow and EAS Build setup
 
 ## Quick Start
 ```bash

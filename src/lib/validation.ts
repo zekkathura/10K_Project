@@ -20,22 +20,22 @@ export interface ValidationResult {
  * - Converted to uppercase
  * - Whitespace trimmed
  */
-export function validateJoinCode(code: string): ValidationResult {
+export function validateJoinCode(code: string): ValidationResult & { valid?: boolean } {
   if (!code || typeof code !== 'string') {
-    return { isValid: false, error: 'Join code is required' };
+    return { isValid: false, valid: false, error: 'Join code is required' };
   }
 
   const trimmed = code.trim().toUpperCase();
 
   if (trimmed.length !== 6) {
-    return { isValid: false, error: 'Join code must be exactly 6 characters' };
+    return { isValid: false, valid: false, error: 'Join code must be exactly 6 characters' };
   }
 
   if (!/^[A-Z0-9]{6}$/.test(trimmed)) {
-    return { isValid: false, error: 'Join code must contain only letters and numbers' };
+    return { isValid: false, valid: false, error: 'Join code must contain only letters and numbers' };
   }
 
-  return { isValid: true, sanitized: trimmed };
+  return { isValid: true, valid: true, sanitized: trimmed };
 }
 
 /**
@@ -43,29 +43,35 @@ export function validateJoinCode(code: string): ValidationResult {
  * - Length between 1 and 50 characters
  * - Trim whitespace
  * - Remove control characters
+ * - Reject HTML tags (XSS prevention)
  */
-export function validateGameName(name: string | null): ValidationResult {
+export function validateGameName(name: string | null): ValidationResult & { valid?: boolean } {
   if (!name) {
     // Game names are optional
-    return { isValid: true, sanitized: null as any };
+    return { isValid: true, valid: true, sanitized: null as any };
   }
 
   if (typeof name !== 'string') {
-    return { isValid: false, error: 'Game name must be text' };
+    return { isValid: false, valid: false, error: 'Game name must be text' };
   }
 
   // Remove control characters
   const sanitized = name.replace(/[\x00-\x1F\x7F]/g, '').trim();
 
   if (sanitized.length === 0) {
-    return { isValid: true, sanitized: null as any };
+    return { isValid: true, valid: true, sanitized: null as any };
   }
 
   if (sanitized.length > 50) {
-    return { isValid: false, error: 'Game name must be 50 characters or less' };
+    return { isValid: false, valid: false, error: 'Game name must be 50 characters or less' };
   }
 
-  return { isValid: true, sanitized };
+  // Reject HTML tags (XSS prevention)
+  if (/<[^>]*>/g.test(sanitized)) {
+    return { isValid: false, valid: false, error: 'Game name cannot contain HTML tags' };
+  }
+
+  return { isValid: true, valid: true, sanitized };
 }
 
 /**
@@ -73,24 +79,30 @@ export function validateGameName(name: string | null): ValidationResult {
  * - Length between 1 and 30 characters
  * - Trim whitespace
  * - Remove control characters
+ * - Reject HTML tags (XSS prevention)
  */
-export function validatePlayerName(name: string): ValidationResult {
+export function validatePlayerName(name: string): ValidationResult & { valid?: boolean } {
   if (!name || typeof name !== 'string') {
-    return { isValid: false, error: 'Player name is required' };
+    return { isValid: false, valid: false, error: 'Player name is required' };
   }
 
   // Remove control characters
   const sanitized = name.replace(/[\x00-\x1F\x7F]/g, '').trim();
 
   if (sanitized.length === 0) {
-    return { isValid: false, error: 'Player name cannot be empty' };
+    return { isValid: false, valid: false, error: 'Player name cannot be empty' };
   }
 
   if (sanitized.length > 30) {
-    return { isValid: false, error: 'Player name must be 30 characters or less' };
+    return { isValid: false, valid: false, error: 'Player name must be 30 characters or less' };
   }
 
-  return { isValid: true, sanitized };
+  // Reject HTML tags (XSS prevention)
+  if (/<[^>]*>/g.test(sanitized)) {
+    return { isValid: false, valid: false, error: 'Player name cannot contain HTML tags' };
+  }
+
+  return { isValid: true, valid: true, sanitized };
 }
 
 /**
@@ -216,9 +228,9 @@ export function validateGameStatus(status: string): ValidationResult {
  * - Must be valid URL format
  * - Must match allowed schemes (http, https, or app deep link)
  */
-export function validateDeepLinkURL(url: string): ValidationResult {
+export function validateDeepLinkURL(url: string): ValidationResult & { valid?: boolean } {
   if (!url || typeof url !== 'string') {
-    return { isValid: false, error: 'URL is required' };
+    return { isValid: false, valid: false, error: 'URL is required' };
   }
 
   try {
@@ -228,12 +240,12 @@ export function validateDeepLinkURL(url: string): ValidationResult {
     const allowedSchemes = ['http:', 'https:', 'com.10kscorekeeper:'];
 
     if (!allowedSchemes.includes(urlObj.protocol)) {
-      return { isValid: false, error: 'Invalid URL scheme' };
+      return { isValid: false, valid: false, error: 'Invalid URL scheme' };
     }
 
-    return { isValid: true, sanitized: url };
+    return { isValid: true, valid: true, sanitized: url };
   } catch (error) {
-    return { isValid: false, error: 'Invalid URL format' };
+    return { isValid: false, valid: false, error: 'Invalid URL format' };
   }
 }
 
@@ -248,6 +260,7 @@ export function sanitizeForDisplay(text: string): string {
   }
 
   return text
+    .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')

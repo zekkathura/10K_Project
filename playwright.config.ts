@@ -52,8 +52,9 @@ export default defineConfig({
     video: 'on-first-retry',
   },
 
-  // Configure projects for major browsers
+  // Configure projects for major browsers and devices
   projects: [
+    // Desktop Chrome - Basic UI tests (no auth)
     {
       name: 'chromium',
       use: {
@@ -63,6 +64,7 @@ export default defineConfig({
       // Only run non-login tests (grep out tests that need auth)
       grep: /@noauth|Edge Cases|Visual/,
     },
+    // Desktop Chrome - Full tests with login
     {
       name: 'dev-chromium',
       use: {
@@ -71,11 +73,51 @@ export default defineConfig({
       },
       // Run all tests including login tests
     },
-    // Uncomment for additional browser testing
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
+    // Mobile - iPhone (small phone)
+    {
+      name: 'mobile-iphone-se',
+      use: {
+        ...devices['iPhone SE'],
+        baseURL: 'http://localhost:8081',
+      },
+      grep: /@noauth/,
+    },
+    // Mobile - iPhone (standard)
+    {
+      name: 'mobile-iphone-12',
+      use: {
+        ...devices['iPhone 12'],
+        baseURL: 'http://localhost:8081',
+      },
+      grep: /@noauth/,
+    },
+    // Mobile - Android (Pixel 5)
+    {
+      name: 'mobile-pixel-5',
+      use: {
+        ...devices['Pixel 5'],
+        baseURL: 'http://localhost:8081',
+      },
+      grep: /@noauth/,
+    },
+    // Tablet - iPad
+    {
+      name: 'tablet-ipad',
+      use: {
+        ...devices['iPad (gen 7)'],
+        baseURL: 'http://localhost:8081',
+      },
+      grep: /@noauth/,
+    },
+    // Tablet - iPad landscape
+    {
+      name: 'tablet-ipad-landscape',
+      use: {
+        ...devices['iPad (gen 7) landscape'],
+        baseURL: 'http://localhost:8081',
+      },
+      grep: /@noauth/,
+    },
   ],
 
   // Run local dev server before starting tests (only for default chromium project)

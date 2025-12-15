@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
+import { logger } from './logger';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -29,10 +30,7 @@ export async function signInWithGoogle() {
       useProxy: true,
     });
 
-    console.log('===== GOOGLE AUTH DEBUG =====');
-    console.log('Platform:', Platform.OS);
-    console.log('Redirect URL being used:', redirectTo);
-    console.log('============================');
+    logger.debug('Google Auth - Platform:', Platform.OS);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -48,27 +46,22 @@ export async function signInWithGoogle() {
     if (error) throw error;
 
     if (data?.url) {
-      console.log('Opening OAuth URL:', data.url);
+      logger.debug('Opening OAuth session');
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
         redirectTo
       );
 
-      console.log('WebBrowser result type:', result.type);
+      logger.debug('WebBrowser result type:', result.type);
 
       if (result.type === 'success') {
         const { url } = result;
-        console.log('Callback URL received:', url);
-        console.log('URL hash:', url.split('#')[1]);
-        console.log('URL query:', url.split('?')[1]);
-
         const params = new URLSearchParams(url.split('#')[1]);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
 
-        console.log('Access token found:', !!accessToken);
-        console.log('Refresh token found:', !!refreshToken);
+        logger.debug('Tokens found:', { access: !!accessToken, refresh: !!refreshToken });
 
         if (accessToken && refreshToken) {
           await supabase.auth.setSession({
@@ -77,16 +70,16 @@ export async function signInWithGoogle() {
           });
           return { success: true };
         } else {
-          console.error('Tokens not found in callback URL');
+          logger.error('Tokens not found in callback URL');
         }
       } else {
-        console.log('WebBrowser result:', result);
+        logger.debug('Auth cancelled or failed:', result.type);
       }
     }
 
     return { success: false, error: 'Authentication cancelled' };
   } catch (error) {
-    console.error('Google sign-in error:', error);
+    logger.error('Google sign-in error', error);
     return { success: false, error };
   }
 }
@@ -96,12 +89,12 @@ export async function signOut() {
     // Sign out from Supabase (clears session)
     const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
-      console.error('Sign out error:', error);
+      logger.error('Sign out error', error);
       return { success: false, error };
     }
     return { success: true };
   } catch (err) {
-    console.error('Sign out exception:', err);
+    logger.error('Sign out exception', err);
     return { success: false, error: err };
   }
 }
@@ -142,7 +135,7 @@ export async function signInWithApple() {
     if (error.code === 'ERR_REQUEST_CANCELED') {
       return { success: false, error: 'Authentication cancelled' };
     }
-    console.error('Apple sign-in error:', error);
+    logger.error('Apple sign-in error', error);
     return { success: false, error };
   }
 }

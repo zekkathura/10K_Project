@@ -217,6 +217,9 @@ export default function GamesListScreen({
         <TouchableOpacity
           style={[styles.actionButton, styles.joinButton]}
           onPress={() => setShowJoinModal(true)}
+          accessibilityLabel="Join game"
+          accessibilityRole="button"
+          accessibilityHint="Enter a code to join an existing game"
         >
           <Text style={styles.actionButtonText} numberOfLines={1} adjustsFontSizeToFit={true}>Join Game</Text>
         </TouchableOpacity>
@@ -234,6 +237,9 @@ export default function GamesListScreen({
             <TouchableOpacity
               style={[styles.gameCard, isSelected && styles.selectedCard]}
               onPress={() => onGameSelect(item.id)}
+              accessibilityLabel={`Game ${item.join_code || 'unknown'}${isSelected ? ', selected' : ''}`}
+              accessibilityRole="button"
+              accessibilityHint="Tap to open this game"
             >
               <View style={styles.gameInfo}>
                 <Text style={styles.gameName}>
@@ -264,6 +270,9 @@ export default function GamesListScreen({
           <TouchableOpacity
             style={[styles.gameCard, styles.joinableGameCard]}
             onPress={() => handleJoinFriendGame(item)}
+            accessibilityLabel={`Join game ${item.join_code} created by ${item.creator_name}`}
+            accessibilityRole="button"
+            accessibilityHint="Tap to join this game"
           >
             <View style={styles.gameInfo}>
               <Text style={styles.gameName}>
@@ -294,6 +303,9 @@ export default function GamesListScreen({
             <TouchableOpacity
               style={[styles.gameCard, styles.completedCard]}
               onPress={() => onGameSelect(item.id)}
+              accessibilityLabel={`Completed game ${item.join_code}${winnerName ? `, winner ${winnerName}` : ''}`}
+              accessibilityRole="button"
+              accessibilityHint="Tap to view this completed game"
             >
               <View style={styles.gameInfo}>
                 <Text style={styles.gameName}>
@@ -339,11 +351,15 @@ export default function GamesListScreen({
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={6}
+              accessibilityLabel="Game code"
+              accessibilityHint="Enter the 6-character game code"
             />
 
             <TouchableOpacity
               style={styles.modalJoinButton}
               onPress={handleJoinByCode}
+              accessibilityLabel="Join game"
+              accessibilityRole="button"
             >
               <Text style={styles.modalJoinButtonText}>Join Game</Text>
             </TouchableOpacity>
@@ -354,6 +370,8 @@ export default function GamesListScreen({
                 setShowJoinModal(false);
                 setJoinCode('');
               }}
+              accessibilityLabel="Cancel"
+              accessibilityRole="button"
             >
               <Text style={styles.modalCancelButtonText}>Cancel</Text>
             </TouchableOpacity>

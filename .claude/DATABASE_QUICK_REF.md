@@ -3,7 +3,7 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2025-12-13
+**Last Verified:** 2025-12-14
 
 **Note:** This file is maintained for quick reference. For current schema:
 - Use `node debug_supabase.js` to inspect live data
@@ -95,6 +95,24 @@ created_at   TIMESTAMP WITH TIME ZONE
 ```
 
 **RLS:** All authenticated users can read. Only admin (service_role) can modify.
+
+---
+
+### app_config (App configuration)
+```
+key          TEXT NOT NULL PK
+value        TEXT NOT NULL
+description  TEXT
+updated_at   TIMESTAMP WITH TIME ZONE
+```
+
+**RLS:** Everyone can read (needed for version check before login). Only service_role can modify.
+
+**Key values:**
+- `min_app_version`: Minimum app version required (e.g., "1.0.0")
+- `force_update`: If "true", blocks app until updated
+- `maintenance_mode`: If "true", shows maintenance message
+- `maintenance_message`: Message shown during maintenance
 
 ---
 
