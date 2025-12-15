@@ -11,6 +11,18 @@
 -- ============================================================
 
 -- ============================================================
+-- SETUP: Create importer profile (required for game FK)
+-- ============================================================
+INSERT INTO profiles (id, email, display_name, created_at, updated_at)
+VALUES (
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
+    'game-importer@10k-scorekeeper.local',
+    'Game Importer',
+    NOW(),
+    NOW()
+) ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
 -- GAME 1: Game 1
 -- Players: Paige, Brandon, Kent
 -- Rounds: 16
@@ -23,7 +35,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '50d4ccaa-8955-4cfb-bbc8-541ce9e18fde',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '9SNIRB',
     'active',
     16,
@@ -36,7 +48,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    'ef2e8bf1-7e15-49bc-afc6-153462c82eb2', '50d4ccaa-8955-4cfb-bbc8-541ce9e18fde', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Paige', false, true, 10800, 1, NOW()
+    'ef2e8bf1-7e15-49bc-afc6-153462c82eb2', '50d4ccaa-8955-4cfb-bbc8-541ce9e18fde', NULL, 'Paige', true, true, 10800, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -311,7 +323,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '6c372905-f7b3-4073-b29c-644ca748cea5',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     'FV5248',
     'active',
     21,
@@ -324,7 +336,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    'fad5b13c-e4e4-4b90-a824-deedc18d8f3f', '6c372905-f7b3-4073-b29c-644ca748cea5', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Brandon', false, true, 9600, 1, NOW()
+    'fad5b13c-e4e4-4b90-a824-deedc18d8f3f', '6c372905-f7b3-4073-b29c-644ca748cea5', NULL, 'Brandon', true, true, 9600, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -884,7 +896,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '925c54e4-f40b-4506-a85c-f2d91a3650d7',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '2STXXP',
     'active',
     17,
@@ -897,7 +909,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    '4bf35a38-5c78-4641-86d5-03408816f1d3', '925c54e4-f40b-4506-a85c-f2d91a3650d7', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Brandon', false, true, 9250, 1, NOW()
+    '4bf35a38-5c78-4641-86d5-03408816f1d3', '925c54e4-f40b-4506-a85c-f2d91a3650d7', NULL, 'Brandon', true, true, 9250, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -1262,7 +1274,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '438afd84-bde2-4f92-96b5-71c1a88efcc2',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '7XFR7D',
     'active',
     13,
@@ -1275,7 +1287,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    '0f0bde98-cb7d-471a-ab09-624b92fc21dc', '438afd84-bde2-4f92-96b5-71c1a88efcc2', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Paige', false, true, 10350, 1, NOW()
+    '0f0bde98-cb7d-471a-ab09-624b92fc21dc', '438afd84-bde2-4f92-96b5-71c1a88efcc2', NULL, 'Paige', true, true, 10350, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -1575,7 +1587,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '07bcb57b-5a1c-4607-9b85-fed2ec021e99',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '45CMW0',
     'active',
     13,
@@ -1588,7 +1600,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    'dc3570a9-0e7c-4acc-a14b-2241c23342e1', '07bcb57b-5a1c-4607-9b85-fed2ec021e99', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Brandon', false, true, 3850, 1, NOW()
+    'dc3570a9-0e7c-4acc-a14b-2241c23342e1', '07bcb57b-5a1c-4607-9b85-fed2ec021e99', NULL, 'Brandon', true, true, 3850, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -2013,7 +2025,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '9e5c3177-0a9d-4f94-9f0a-26d5b8496ce3',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     'IFTXNO',
     'active',
     18,
@@ -2026,7 +2038,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    'd79b68dc-d4cd-4eaa-9be7-7a73893c6b92', '9e5c3177-0a9d-4f94-9f0a-26d5b8496ce3', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Ben', false, true, 8050, 1, NOW()
+    'd79b68dc-d4cd-4eaa-9be7-7a73893c6b92', '9e5c3177-0a9d-4f94-9f0a-26d5b8496ce3', NULL, 'Ben', true, true, 8050, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -2521,7 +2533,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '89266b2f-526a-487c-a1c0-84372755c2c3',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '1RQ3C8',
     'active',
     20,
@@ -2534,7 +2546,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    '5d68c730-8104-4afc-9a8a-9e8d5da3de3d', '89266b2f-526a-487c-a1c0-84372755c2c3', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Brandon', false, true, 8000, 1, NOW()
+    '5d68c730-8104-4afc-9a8a-9e8d5da3de3d', '89266b2f-526a-487c-a1c0-84372755c2c3', NULL, 'Brandon', true, true, 8000, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -3059,7 +3071,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '84817abf-5297-4377-8849-67b111a78683',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     '9BO1AL',
     'active',
     25,
@@ -3072,7 +3084,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    '52d75475-363a-45fd-88c8-8937ce354b6c', '84817abf-5297-4377-8849-67b111a78683', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Paige', false, true, 10200, 1, NOW()
+    '52d75475-363a-45fd-88c8-8937ce354b6c', '84817abf-5297-4377-8849-67b111a78683', NULL, 'Paige', true, true, 10200, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
@@ -3612,7 +3624,7 @@ INSERT INTO games (
     winning_player_id, winning_score, created_at, updated_at, finished_at
 ) VALUES (
     '190c37a1-eb3b-4202-a9b6-6fd91c2908f5',
-    'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385',
+    'bd7a6ed5-cab1-400b-915d-794633d1b83a',
     'PAJAD1',
     'active',
     19,
@@ -3625,7 +3637,7 @@ INSERT INTO games (
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at
 ) VALUES (
-    '86a8368d-7fd4-483f-87eb-4b97410be9a7', '190c37a1-eb3b-4202-a9b6-6fd91c2908f5', 'd9b3a4c7-c0f1-47b7-a070-c408cd3b3385', 'Brittany', false, true, 7200, 1, NOW()
+    '86a8368d-7fd4-483f-87eb-4b97410be9a7', '190c37a1-eb3b-4202-a9b6-6fd91c2908f5', NULL, 'Brittany', true, true, 7200, 1, NOW()
 );
 INSERT INTO game_players (
     id, game_id, user_id, player_name, is_guest, is_on_board, total_score, display_order, created_at

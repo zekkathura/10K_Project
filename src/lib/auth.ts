@@ -14,6 +14,9 @@ export async function signInWithGoogle() {
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
+          queryParams: {
+            prompt: 'select_account', // Always show account picker
+          },
         },
       });
 
@@ -36,6 +39,9 @@ export async function signInWithGoogle() {
       options: {
         redirectTo,
         skipBrowserRedirect: true,
+        queryParams: {
+          prompt: 'select_account', // Always show account picker
+        },
       },
     });
 
@@ -86,12 +92,18 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    console.error('Sign out error:', error);
-    return { success: false, error };
+  try {
+    // Sign out from Supabase (clears session)
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      console.error('Sign out error:', error);
+      return { success: false, error };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('Sign out exception:', err);
+    return { success: false, error: err };
   }
-  return { success: true };
 }
 
 export async function signInWithApple() {

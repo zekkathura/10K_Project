@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../lib/types';
 import { Theme, useThemedStyles } from '../lib/theme';
@@ -86,7 +86,7 @@ export default function ProfileSettingsScreen({ navigation, onSignOut }: Profile
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={styles.saveButtonText.color} />
+        <ThemedLoader text="Loading profile..." />
       </View>
     );
   }
@@ -127,7 +127,7 @@ export default function ProfileSettingsScreen({ navigation, onSignOut }: Profile
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color={styles.saveButtonText.color} />
+            <ThemedLoader mode="inline" color={styles.saveButtonText.color} />
           ) : (
             <Text style={styles.saveButtonText}>Save Changes</Text>
           )}

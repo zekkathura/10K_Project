@@ -1,17 +1,19 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   Image,
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
@@ -20,7 +22,40 @@ import { supabase } from '../lib/supabase';
 
 const REMEMBER_ME_KEY = '10k-remember-me';
 
+// Dice faces for decoration
+const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
 export default function LoginScreen() {
+  // Logo wiggle animation
+  const wiggleAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Create continuous wiggle animation
+    const wiggle = Animated.loop(
+      Animated.sequence([
+        Animated.timing(wiggleAnim, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(wiggleAnim, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    wiggle.start();
+    return () => wiggle.stop();
+  }, [wiggleAnim]);
+
+  // Interpolate rotation from -3deg to 3deg
+  const rotation = wiggleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-3deg', '3deg'],
+  });
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -30,6 +65,10 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [displayNameFocused, setDisplayNameFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const styles = useThemedStyles(createStyles);
 
   useEffect(() => {
@@ -262,252 +301,361 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.container}>
-          <Image
-            source={require('../../assets/images/10k_logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          {/* Top accent bar */}
+          <View style={styles.accentBar} />
 
-          <Text style={styles.title}>10K Scorekeeper</Text>
-
-          <View style={styles.modeRow}>
-            <TouchableOpacity onPress={() => switchMode('signin')}>
-              <Text style={[styles.modeText, mode === 'signin' && styles.modeTextActive]}>Sign In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => switchMode('signup')}>
-              <Text style={[styles.modeText, mode === 'signup' && styles.modeTextActive]}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.form}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="you@example.com"
-              placeholderTextColor={styles.inputPlaceholder.color}
-            />
-
-            {mode === 'signup' && (
-              <>
-                <Text style={[styles.label, styles.passwordLabel]}>Display Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  placeholder="Your name"
-                  placeholderTextColor={styles.inputPlaceholder.color}
-                />
-              </>
-            )}
-
-            <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.inputField}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholder="Enter password"
-                placeholderTextColor={styles.inputPlaceholder.color}
-                textContentType="password"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+          <View style={styles.content}>
+            {/* Logo section */}
+            <View style={styles.logoSection}>
+              <Animated.View style={[styles.logoContainer, { transform: [{ rotate: rotation }] }]}>
                 <Image
-                  source={
-                    showPassword
-                      ? require('../../assets/images/visiblePassword.png')
-                      : require('../../assets/images/HiddenPassword.png')
-                  }
-                  style={styles.eyeIcon}
+                  source={require('../../assets/images/10k_logo.png')}
+                  style={styles.logo}
                   resizeMode="contain"
                 />
+              </Animated.View>
+              <View style={styles.titleContainer}>
+                <Text style={styles.title}>10K Scorekeeper</Text>
+                <Text style={styles.subtitle}>Track your dice game victories</Text>
+              </View>
+            </View>
+
+            {/* Tabs - underline style */}
+            <View style={styles.tabContainer}>
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => switchMode('signin')}
+              >
+                <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
+                  SIGN IN
+                </Text>
+                <View style={[styles.tabUnderline, mode === 'signin' && styles.tabUnderlineActive]} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => switchMode('signup')}
+              >
+                <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
+                  SIGN UP
+                </Text>
+                <View style={[styles.tabUnderline, mode === 'signup' && styles.tabUnderlineActive]} />
               </TouchableOpacity>
             </View>
 
-            {mode === 'signup' && (
-              <>
-                <Text style={[styles.label, styles.passwordLabel]}>Confirm Password</Text>
-                <View style={styles.inputRow}>
-                  <TextInput
-                    style={styles.inputField}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showConfirmPassword}
-                    placeholder="Confirm password"
-                    placeholderTextColor={styles.inputPlaceholder.color}
-                    textContentType="password"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    <Image
-                      source={
-                        showConfirmPassword
-                          ? require('../../assets/images/visiblePassword.png')
-                          : require('../../assets/images/HiddenPassword.png')
-                      }
-                      style={styles.eyeIcon}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
+            {/* Form */}
+            <View style={styles.form}>
+              <Text style={styles.label}>EMAIL</Text>
+              <TextInput
+                style={[styles.input, emailFocused && styles.inputFocused]}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="you@example.com"
+                placeholderTextColor={styles.inputPlaceholder.color}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+              />
 
-            {mode === 'signin' && (
-              <View style={styles.inlineRow}>
-                <TouchableOpacity style={styles.rememberRow} onPress={() => persistRememberMe(!rememberMe)}>
-                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                    {rememberMe && <Text style={styles.checkboxMark}>✓</Text>}
-                  </View>
-                  <Text style={styles.rememberText}>Remember me</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleForgotPassword}>
-                  <Text style={styles.forgotText}>Forgot password?</Text>
+              {mode === 'signup' && (
+                <>
+                  <Text style={styles.label}>DISPLAY NAME</Text>
+                  <TextInput
+                    style={[styles.input, displayNameFocused && styles.inputFocused]}
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    placeholder="Your name"
+                    placeholderTextColor={styles.inputPlaceholder.color}
+                    onFocus={() => setDisplayNameFocused(true)}
+                    onBlur={() => setDisplayNameFocused(false)}
+                  />
+                </>
+              )}
+
+              <Text style={styles.label}>PASSWORD</Text>
+              <View style={[styles.inputRow, passwordFocused && styles.inputRowFocused]}>
+                <TextInput
+                  style={styles.inputField}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  placeholder="Enter password"
+                  placeholderTextColor={styles.inputPlaceholder.color}
+                  textContentType="password"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                />
+                <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+                  <Image
+                    source={
+                      showPassword
+                        ? require('../../assets/images/visiblePassword.png')
+                        : require('../../assets/images/HiddenPassword.png')
+                    }
+                    style={styles.eyeIcon}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
               </View>
-            )}
 
-            <TouchableOpacity
-              style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
-              onPress={onSubmit}
-              disabled={loading}
-            >
+              {mode === 'signup' && (
+                <>
+                  <Text style={styles.label}>CONFIRM PASSWORD</Text>
+                  <View style={[styles.inputRow, confirmPasswordFocused && styles.inputRowFocused]}>
+                    <TextInput
+                      style={styles.inputField}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showConfirmPassword}
+                      placeholder="Confirm password"
+                      placeholderTextColor={styles.inputPlaceholder.color}
+                      textContentType="password"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onFocus={() => setConfirmPasswordFocused(true)}
+                      onBlur={() => setConfirmPasswordFocused(false)}
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeButton}
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      <Image
+                        source={
+                          showConfirmPassword
+                            ? require('../../assets/images/visiblePassword.png')
+                            : require('../../assets/images/HiddenPassword.png')
+                        }
+                        style={styles.eyeIcon}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {mode === 'signin' && (
+                <View style={styles.inlineRow}>
+                  <TouchableOpacity style={styles.rememberRow} onPress={() => persistRememberMe(!rememberMe)}>
+                    <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                      {rememberMe && <Text style={styles.checkboxMark}>✓</Text>}
+                    </View>
+                    <Text style={styles.rememberText}>Remember me</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleForgotPassword}>
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+                onPress={onSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ThemedLoader mode="inline" color={styles.primaryButtonText.color} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {mode === 'signin' ? 'LOG IN' : 'SIGN UP'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.separatorRow}>
+              <View style={styles.separatorLine} />
+              <Text style={styles.separatorText}>OR</Text>
+              <View style={styles.separatorLine} />
+            </View>
+
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={loading}>
               {loading ? (
-                <ActivityIndicator color={styles.primaryButtonText.color} />
+                <ThemedLoader mode="inline" color={styles.googleButtonText.color} />
               ) : (
-                <Text style={styles.primaryButtonText}>{mode === 'signin' ? 'Log in' : 'Sign up'}</Text>
+                <>
+                  <Image
+                    source={require('../../assets/images/google_logo.png')}
+                    style={styles.buttonLogo}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
 
-          <View style={styles.separatorRow}>
-            <View style={styles.separatorLine} />
-            <Text style={styles.separatorText}>Or connect with</Text>
-            <View style={styles.separatorLine} />
-          </View>
+          {/* Spacer to push dice to bottom */}
+          <View style={styles.spacer} />
 
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color={styles.googleButtonText.color} />
-            ) : (
-              <>
-                <Image
-                  source={require('../../assets/images/google_logo.png')}
-                  style={styles.buttonLogo}
-                  resizeMode="contain"
-                />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Bottom dice decoration */}
+          <View style={styles.diceContainer}>
+            {DICE_FACES.map((die, i) => (
+              <View key={i} style={styles.diceWrapper}>
+                <Text style={styles.diceIcon}>{die}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const createStyles = ({ colors }: Theme) =>
+const createStyles = ({ colors, mode }: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.background },
     scroll: {
       flexGrow: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
       backgroundColor: colors.background,
     },
     container: {
-      width: '100%',
-      alignItems: 'center',
+      flex: 1,
       backgroundColor: colors.background,
-      padding: 16,
-      paddingTop: 32,
-      paddingBottom: 24,
+    },
+    accentBar: {
+      height: 4,
+      backgroundColor: colors.accent,
+    },
+    content: {
+      paddingHorizontal: 32,
+      paddingTop: 40,
+      paddingBottom: 20,
+      maxWidth: 400,
+      width: '100%',
+      alignSelf: 'center',
+      zIndex: 2,
+    },
+    spacer: {
+      flex: 1,
+      minHeight: 40,
+      zIndex: 0,
+    },
+    logoSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      marginBottom: 28,
+    },
+    logoContainer: {
+      width: 64,
+      height: 64,
+      borderRadius: 12,
+      overflow: 'hidden',
     },
     logo: {
-      width: 120,
-      height: 120,
-      marginBottom: 12,
+      width: '100%',
+      height: '100%',
+    },
+    titleContainer: {
+      flex: 1,
     },
     title: {
-      fontSize: 32,
-      fontWeight: 'bold',
-      marginBottom: 16,
-      color: colors.textPrimary,
-    },
-    modeRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      width: '100%',
-      marginBottom: 16,
-      paddingHorizontal: 6,
-    },
-    modeText: {
-      fontSize: 16,
-      color: colors.textSecondary,
-      fontWeight: '600',
-      paddingBottom: 6,
-      borderBottomWidth: 2,
-      borderBottomColor: 'transparent',
-    },
-    modeTextActive: {
-      color: colors.accent,
+      fontSize: 22,
       fontWeight: '700',
-      borderBottomColor: colors.accent,
-    },
-    form: {
-      width: '100%',
-      gap: 8,
-      marginBottom: 16,
-    },
-    label: {
       color: colors.textPrimary,
+      letterSpacing: -0.5,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 4,
+      opacity: 0.7,
+    },
+    tabContainer: {
+      flexDirection: 'row',
+      gap: 24,
+      marginBottom: 24,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.border,
+    },
+    tab: {
+      paddingBottom: 12,
+      marginBottom: -2,
+    },
+    tabText: {
       fontSize: 14,
       fontWeight: '600',
+      color: colors.textSecondary,
+      letterSpacing: 1,
+      opacity: 0.6,
     },
-    passwordLabel: {
+    tabTextActive: {
+      color: colors.textPrimary,
+      opacity: 1,
+    },
+    tabUnderline: {
+      height: 3,
+      backgroundColor: 'transparent',
+      marginTop: 10,
+      borderRadius: 2,
+    },
+    tabUnderlineActive: {
+      backgroundColor: colors.accent,
+    },
+    form: {
+      gap: 12,
+      marginBottom: 20,
+    },
+    label: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: 1,
+      marginBottom: 6,
       marginTop: 4,
     },
     input: {
       width: '100%',
       backgroundColor: colors.inputBackground,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
-      borderRadius: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      fontSize: 16,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderRadius: 4,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      fontSize: 15,
       color: colors.inputText,
+      // On web, remove default browser outline - we handle focus styling manually
+      ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+    },
+    inputFocused: {
+      borderColor: colors.accent,
+      // Web-specific box shadow for focus ring effect
+      ...(Platform.OS === 'web' ? {
+        boxShadow: `0 0 0 2px ${colors.accentLight}`,
+      } as any : {}),
     },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
-      borderRadius: 8,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderRadius: 4,
       backgroundColor: colors.inputBackground,
-      paddingLeft: 12,
+      paddingLeft: 16,
       paddingRight: 8,
+    },
+    inputRowFocused: {
+      borderColor: colors.accent,
+      // Web-specific box shadow for focus ring effect
+      ...(Platform.OS === 'web' ? {
+        boxShadow: `0 0 0 2px ${colors.accentLight}`,
+      } as any : {}),
     },
     inputField: {
       flex: 1,
-      paddingVertical: 10,
+      paddingVertical: 14,
       paddingHorizontal: 0,
-      fontSize: 16,
+      fontSize: 15,
       color: colors.inputText,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      // On web, remove outline from inner input - let parent inputRow show border
+      ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
     },
     inputPlaceholder: {
       color: colors.placeholder,
@@ -526,12 +674,12 @@ const createStyles = ({ colors }: Theme) =>
     checkbox: {
       width: 18,
       height: 18,
-      borderRadius: 4,
+      borderRadius: 2,
       borderWidth: 2,
-      borderColor: colors.textSecondary,
+      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surface,
+      backgroundColor: 'transparent',
     },
     checkboxChecked: {
       backgroundColor: colors.accent,
@@ -539,23 +687,22 @@ const createStyles = ({ colors }: Theme) =>
     },
     checkboxMark: {
       color: colors.buttonText,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '700',
     },
     rememberText: {
       color: colors.textSecondary,
       fontSize: 13,
-      fontWeight: '600',
     },
     forgotText: {
-      color: colors.accent,
+      color: colors.accentLight,
       fontSize: 13,
-      fontWeight: '600',
+      fontWeight: '500',
     },
     primaryButton: {
       backgroundColor: colors.accent,
-      paddingVertical: 14,
-      borderRadius: 10,
+      paddingVertical: 16,
+      borderRadius: 4,
       alignItems: 'center',
       marginTop: 8,
     },
@@ -564,48 +711,46 @@ const createStyles = ({ colors }: Theme) =>
     },
     primaryButtonText: {
       color: colors.buttonText,
-      fontSize: 16,
+      fontSize: 14,
       fontWeight: '700',
+      letterSpacing: 1,
     },
     separatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      marginBottom: 16,
-      marginTop: 8,
-      width: '100%',
+      gap: 16,
+      marginBottom: 20,
     },
     separatorLine: {
       flex: 1,
-      height: 1,
+      height: 2,
       backgroundColor: colors.border,
     },
     separatorText: {
       color: colors.textSecondary,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
+      letterSpacing: 1,
+      opacity: 0.5,
     },
     buttonLogo: {
-      width: 20,
-      height: 20,
+      width: 18,
+      height: 18,
       marginRight: 10,
     },
     googleButton: {
-      backgroundColor: colors.surface,
-      paddingVertical: 15,
-      paddingHorizontal: 30,
-      borderRadius: 8,
+      backgroundColor: 'transparent',
+      paddingVertical: 14,
+      borderRadius: 4,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      minWidth: 250,
-      marginBottom: 12,
-      borderWidth: 1,
+      borderWidth: 2,
       borderColor: colors.border,
     },
     googleButtonText: {
       color: colors.textPrimary,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
     },
     eyeButton: {
@@ -615,5 +760,24 @@ const createStyles = ({ colors }: Theme) =>
     eyeIcon: {
       width: 22,
       height: 22,
+      opacity: 0.6,
+    },
+    diceContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'stretch',
+      gap: 8,
+      height: 72,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    diceWrapper: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    diceIcon: {
+      fontSize: 44,
+      color: mode === 'dark' ? 'rgba(255, 255, 255, 0.75)' : '#1a3a6e',
     },
   });

@@ -71,6 +71,7 @@ When debugging auth/permission issues or after policy changes:
 - `theme-styling` – Theme usage, modal structure, button patterns
 - `validation-errors` – Input validation, error display
 - `modal-components` – Standard modal layouts
+- `testing-patterns` – Unit tests, E2E tests, mocking, test utilities
 
 **Why:** Skills load on-demand, reducing context. They contain all implementation patterns.
 
@@ -80,6 +81,7 @@ When debugging auth/permission issues or after policy changes:
 - **Validation**: Use `src/lib/validation.ts` functions before any DB operation
 - **Database Ops**: Use functions from `src/lib/database.ts` (don't write raw Supabase queries)
 - **Themes**: Use `useTheme()` and `useThemedStyles()` – never hardcode colors
+- **Loading States**: Use `<ThemedLoader />` from `src/components` (red dice on web, spinner on native)
 
 ## Recent Critical Fixes
 - ✅ Auth security: Fixed `secureTextEntry`, removed unsafe password masking
@@ -95,6 +97,8 @@ npm test               # Run tests
 
 **Key paths:**
 - Screens: `src/screens/`
+- Shared components: `src/components/` (ThemedLoader, DiceLoader)
+- Components reference: `.claude/LOADER_COMPONENTS_REF.md`
 - Database schema: `.claude/DATABASE_QUICK_REF.md` (AI quick reference - table columns)
 - Database RLS policies: `.claude/RLS_POLICIES_REF.md` (AI quick reference - security policies)
 - Database DDL: `database/CURRENT_SCHEMA.sql` (full authoritative schema)

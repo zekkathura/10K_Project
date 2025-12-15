@@ -31,3 +31,9 @@ Thumbs.db
 *.temp
 temp_*
 nul
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+__tests__/e2e/*.png

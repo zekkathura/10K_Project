@@ -6,9 +6,9 @@ import {
   StyleSheet,
   FlatList,
   Alert,
-  ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import { createGame } from '../lib/database';
 import { Profile } from '../lib/types';
@@ -198,7 +198,7 @@ export default function CreateGameScreen({
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <ThemedLoader text="Loading players..." />
       </View>
     );
   }
@@ -284,7 +284,7 @@ export default function CreateGameScreen({
         disabled={creating}
       >
         {creating ? (
-          <ActivityIndicator color="#fff" />
+          <ThemedLoader mode="inline" color="#fff" />
         ) : (
           <Text style={styles.createButtonText}>
             Start Game ({selectedUserIds.size + guestPlayers.length} players)

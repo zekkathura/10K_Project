@@ -3,7 +3,7 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2025-12-13
+**Last Verified:** 2025-12-14
 **Current Mode:** 🚧 DEVELOPMENT (Permissive policies enabled)
 
 **Note:** This file is maintained for quick reference. For current state, use:
@@ -42,6 +42,7 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 
 #### SELECT Policies
 - ✅ `Users can view their own profile` - Users can view own profile (auth.uid() = id)
+- ✅ `Users can select own profile by id` - Allows profile existence check during signup (auth.uid() = id)
 - ✅ `Users can view profiles of players in their games` - Users can view co-players
 - ⚠️ `Authenticated users can view all profiles` - [REMOVE IN PROD] Too broad (using: true)
 

@@ -6,10 +6,10 @@ import {
   StyleSheet,
   FlatList,
   Alert,
-  ActivityIndicator,
   Modal,
   TextInput,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import { getMyGames, joinGameByCode, getJoinableGamesWithFriends } from '../lib/database';
 import { Game } from '../lib/types';
@@ -195,7 +195,7 @@ export default function GamesListScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={styles.actionButtonText.color} />
+        <ThemedLoader text="Loading games..." />
       </View>
     );
   }
@@ -223,7 +223,7 @@ export default function GamesListScreen({
       </View>
 
       {/* Active Games Section */}
-      <Text style={styles.sectionTitle}>My Active Games</Text>
+      <Text style={styles.sectionTitle}>My Active Games ({activeGames.length})</Text>
       <FlatList
         data={activeGames}
         keyExtractor={(item) => item.id}
@@ -256,7 +256,7 @@ export default function GamesListScreen({
       />
 
       {/* Active Friend Games Section */}
-      <Text style={styles.sectionTitle}>Live Matches with Recent Players</Text>
+      <Text style={styles.sectionTitle}>Live Matches with Recent Players ({sortedJoinableGames.length})</Text>
       <FlatList
         data={sortedJoinableGames}
         keyExtractor={(item) => item.id}
@@ -283,7 +283,7 @@ export default function GamesListScreen({
       />
 
       {/* Completed Games Section */}
-      <Text style={styles.sectionTitle}>My Completed Games</Text>
+      <Text style={styles.sectionTitle}>My Completed Games ({completedGames.length})</Text>
       <FlatList
         data={completedGames}
         keyExtractor={(item) => item.id}

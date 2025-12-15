@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
   Image,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../lib/types';
 import { ThemeMode, useTheme, useThemedStyles } from '../lib/theme';
@@ -44,22 +44,32 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
-        Alert.alert('Error', 'No user found');
-        navigation.goBack();
+        Alert.alert('Error', 'No user found. Please sign in again.');
+        onSignOut?.();
         return;
       }
 
-      const { data, error } = await supabase
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile load timed out')), 10000)
+      );
+
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
+      const { data, error } = await Promise.race([
+        profilePromise,
+        timeoutPromise,
+      ]) as any;
+
       if (error) throw error;
 
       if (!data) {
-        Alert.alert('No Profile', 'No profile found. Please contact support or try signing in again.');
-        navigation.goBack();
+        Alert.alert('No Profile', 'No profile found. Signing out...');
+        onSignOut?.();
         return;
       }
 
@@ -72,7 +82,9 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
         setMode(storedMode);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      console.error('Error loading profile:', error);
+      Alert.alert('Error', 'Failed to load profile. Signing out...');
+      onSignOut?.();
     } finally {
       setLoading(false);
     }
@@ -122,7 +134,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <ThemedLoader text="Loading settings..." />
       </View>
     );
   }
@@ -233,7 +245,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ThemedLoader mode="inline" color="#fff" size="small" />
                 ) : (
                   <Text style={styles.applyButtonText}>Apply</Text>
                 )}

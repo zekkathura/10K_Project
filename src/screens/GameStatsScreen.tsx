@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
@@ -8,26 +9,46 @@ interface GameStatsScreenProps {
   onOpenProfile?: () => void;
 }
 
+interface GameDetail {
+  gameId: string;
+  joinCode: string;
+  score: number;
+  date: string;
+}
+
+interface BestTurnDetail {
+  gameId: string;
+  joinCode: string;
+  turnNumber: number;
+  score: number;
+  date: string;
+}
+
 interface UserStats {
   totalGames: number;
-  activeGames: number;
-  completedGames: number;
   wins: number;
-  averageScore: number;
   bestScore: number;
-  averageTurnsPerGame: number;
+  bestScoreGame: GameDetail | null;
+  averageScore: number;
+  averageScorePerRound: number;
   bestTurn: number;
+  bestTurnDetail: BestTurnDetail | null;
+  completedGames: GameDetail[];
+  longestBustStreak: number;
 }
 
 interface OverallStats {
   totalGames: number;
-  activeGames: number;
-  completedGames: number;
-  totalPlayers: number;
   averagePlayersPerGame: number;
-  topScore: number;
-  topScorePlayer: string;
-  mostActivePlayers: { name: string; games: number }[];
+  averageRoundsPerGame: number;
+  highScore: number;
+  highScorePlayer: string;
+  lowScore: number;
+  lowScorePlayer: string;
+  averageScorePerRound: number;
+  mostActivePlayers: { name: string; games: number; avgScore: number }[];
+  longestBustStreak: number;
+  longestBustStreakPlayer: string;
 }
 
 const formatNumber = (value: number) => {
@@ -40,11 +61,16 @@ const getPlayerLabel = (player: any) => {
   return player?.user?.display_name || player?.player_name || 'Unknown';
 };
 
+type PlayerSortMode = 'games' | 'avgScore';
+type DetailModal = 'bestScore' | 'bestTurn' | 'avgScore' | null;
+
 export default function GameStatsScreen({ navigation, onOpenProfile }: GameStatsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playerSortMode, setPlayerSortMode] = useState<PlayerSortMode>('games');
+  const [activeModal, setActiveModal] = useState<DetailModal>(null);
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
 
@@ -55,6 +81,44 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       {subtext ? <Text style={styles.statSubtext}>{subtext}</Text> : null}
     </View>
   );
+
+  const ClickableStatCard = ({
+    label,
+    value,
+    subtext,
+    onPress,
+    disabled
+  }: {
+    label: string;
+    value: string | number;
+    subtext?: string;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.statCard, styles.clickableStatCard, disabled && styles.clickableStatCardDisabled]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <View style={styles.statCardHeader}>
+        <Text style={styles.statValue}>{value}</Text>
+        {!disabled && <Text style={styles.clickableIndicator}>ℹ️</Text>}
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+      {subtext ? <Text style={styles.statSubtext}>{subtext}</Text> : null}
+    </TouchableOpacity>
+  );
+
+  // Sort players based on selected mode
+  const sortedPlayers = useMemo(() => {
+    if (!overallStats?.mostActivePlayers) return [];
+    const players = [...overallStats.mostActivePlayers];
+    if (playerSortMode === 'avgScore') {
+      return players.sort((a, b) => b.avgScore - a.avgScore);
+    }
+    return players.sort((a, b) => b.games - a.games);
+  }, [overallStats?.mostActivePlayers, playerSortMode]);
 
   useEffect(() => {
     loadStats();
@@ -75,13 +139,14 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       }
 
       // Pull the user's games and related data
+      // Note: Must specify FK explicitly due to multiple relationships between game_players and games
       const { data: myGamePlayers } = await supabase
         .from('game_players')
         .select(`
           id,
           game_id,
           total_score,
-          game:games(status, created_at, finished_at)
+          game:games!game_players_game_id_fkey(id, status, created_at, finished_at, join_code)
         `)
         .eq('user_id', userId);
 
@@ -100,12 +165,20 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
             .in('game_id', endedGameIds)
         : { data: [] as any[] };
 
-      // All turns for the current user (across games)
+      // All turns for the current user (across games) - include turn info for best turn detail and bust streaks
       const { data: myTurns } = playerIds.length > 0
         ? await supabase
             .from('turns')
-            .select('score, is_bust, player_id')
+            .select(`
+              score,
+              is_bust,
+              player_id,
+              turn_number,
+              game_id
+            `)
             .in('player_id', playerIds)
+            .order('game_id')
+            .order('turn_number')
         : { data: [] as any[] };
 
       // Compute wins by checking for highest score per completed game
@@ -130,34 +203,123 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         });
       }
 
-      const bestScore = userEntries.reduce((max, entry) => Math.max(max, entry.total_score || 0), 0);
+      // Find best score and its game details
+      let bestScore = 0;
+      let bestScoreGame: GameDetail | null = null;
+      userEntries.forEach(entry => {
+        if ((entry.total_score || 0) > bestScore) {
+          bestScore = entry.total_score || 0;
+          if (entry.game) {
+            bestScoreGame = {
+              gameId: entry.game.id,
+              joinCode: entry.game.join_code || '------',
+              score: entry.total_score || 0,
+              date: new Date(entry.game.created_at).toLocaleDateString(),
+            };
+          }
+        }
+      });
+
       const averageScore = completedGames > 0
         ? userEntries
             .filter(entry => entry.game?.status === 'ended')
             .reduce((sum, entry) => sum + (entry.total_score || 0), 0) / completedGames
         : 0;
 
-      const bestTurn = (myTurns || [])
+      // Find best turn and its details
+      let bestTurn = 0;
+      let bestTurnPlayerId: string | null = null;
+      let bestTurnRound = 0;
+      (myTurns || [])
         .filter(turn => !turn.is_bust)
-        .reduce((max, turn) => Math.max(max, turn.score || 0), 0);
+        .forEach(turn => {
+          if ((turn.score || 0) > bestTurn) {
+            bestTurn = turn.score || 0;
+            bestTurnPlayerId = turn.player_id;
+            bestTurnRound = turn.turn_number || 0;
+          }
+        });
 
-      const averageTurnsPerGame = totalGames > 0 ? (myTurns?.length || 0) / totalGames : 0;
+      // Get game details for best turn
+      let bestTurnDetail: BestTurnDetail | null = null;
+      if (bestTurnPlayerId) {
+        // Find the game_player entry to get game details
+        const bestTurnEntry = userEntries.find(e => e.id === bestTurnPlayerId);
+        if (bestTurnEntry?.game) {
+          bestTurnDetail = {
+            gameId: bestTurnEntry.game.id,
+            joinCode: bestTurnEntry.game.join_code || '------',
+            turnNumber: bestTurnRound,
+            score: bestTurn,
+            date: new Date(bestTurnEntry.game.created_at).toLocaleDateString(),
+          };
+        }
+      }
+
+      // Build completed games list for avg score popup
+      const completedGamesList: GameDetail[] = userEntries
+        .filter(entry => entry.game?.status === 'ended')
+        .map(entry => ({
+          gameId: entry.game?.id || entry.game_id,
+          joinCode: entry.game?.join_code || '------',
+          score: entry.total_score || 0,
+          date: new Date(entry.game?.created_at || '').toLocaleDateString(),
+        }))
+        .sort((a, b) => b.score - a.score);
+
+      // Calculate average score per turn (busts count as 0)
+      const totalTurns = myTurns?.length || 0;
+      const totalTurnScoreSum = (myTurns || []).reduce((sum, turn) => {
+        // Bust turns count as 0, non-bust turns use their score
+        return sum + (turn.is_bust ? 0 : (turn.score || 0));
+      }, 0);
+      const averageScorePerRound = totalTurns > 0 ? totalTurnScoreSum / totalTurns : 0;
+
+      // Calculate longest bust streak (within a single game)
+      let longestBustStreak = 0;
+      if (myTurns && myTurns.length > 0) {
+        // Group turns by game_id
+        const turnsByGame: Record<string, any[]> = {};
+        myTurns.forEach(turn => {
+          if (!turnsByGame[turn.game_id]) {
+            turnsByGame[turn.game_id] = [];
+          }
+          turnsByGame[turn.game_id].push(turn);
+        });
+
+        // Find longest bust streak in each game
+        Object.values(turnsByGame).forEach(gameTurns => {
+          // Sort by turn_number to ensure correct order
+          gameTurns.sort((a, b) => (a.turn_number || 0) - (b.turn_number || 0));
+          let currentStreak = 0;
+          gameTurns.forEach(turn => {
+            if (turn.is_bust) {
+              currentStreak++;
+              longestBustStreak = Math.max(longestBustStreak, currentStreak);
+            } else {
+              currentStreak = 0;
+            }
+          });
+        });
+      }
 
       setUserStats({
         totalGames,
-        activeGames,
-        completedGames,
         wins,
-        averageScore,
         bestScore,
-        averageTurnsPerGame,
+        bestScoreGame,
+        averageScore,
+        averageScorePerRound,
         bestTurn,
+        bestTurnDetail,
+        completedGames: completedGamesList,
+        longestBustStreak,
       });
 
       // Overall stats across all players/games
       const { data: allGames } = await supabase
         .from('games')
-        .select('id, status');
+        .select('id, status, total_rounds');
 
       const { data: allGamePlayers } = await supabase
         .from('game_players')
@@ -170,17 +332,36 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           user:profiles(display_name)
         `);
 
+      // Get all turns for average rounds per game, average score per round, and bust streaks
+      const { data: allTurns } = await supabase
+        .from('turns')
+        .select('id, game_id, player_id, turn_number, score, is_bust')
+        .order('game_id')
+        .order('player_id')
+        .order('turn_number');
+
       const gamesList = allGames || [];
       const playersList = allGamePlayers || [];
+      const turnsList = allTurns || [];
       const endedGameSet = new Set(gamesList.filter(game => game.status === 'ended').map(game => game.id));
 
       const totalGamesTracked = gamesList.length;
-      const activeGamesTracked = gamesList.filter(game => game.status === 'active').length;
-      const completedGamesTracked = gamesList.filter(game => game.status === 'ended').length;
-      const totalPlayers = playersList.length;
-      const averagePlayersPerGame = totalGamesTracked > 0 ? totalPlayers / totalGamesTracked : 0;
+      const averagePlayersPerGame = totalGamesTracked > 0 ? playersList.length / totalGamesTracked : 0;
 
-      const topScoreEntry = playersList
+      // Calculate average rounds per game from total_rounds field (the actual game rounds, not turn entries)
+      const gamesWithRounds = gamesList.filter(g => g.total_rounds && g.total_rounds > 0);
+      const totalRoundsSum = gamesWithRounds.reduce((sum, g) => sum + (g.total_rounds || 0), 0);
+      const averageRoundsPerGame = gamesWithRounds.length > 0 ? totalRoundsSum / gamesWithRounds.length : 0;
+
+      // Calculate average score per turn across all players (busts count as 0)
+      const allTurnScores = turnsList.reduce((sum, turn) => {
+        // Bust turns count as 0, non-bust turns use their score
+        return sum + (turn.is_bust ? 0 : (turn.score || 0));
+      }, 0);
+      const overallAvgScorePerRound = turnsList.length > 0 ? allTurnScores / turnsList.length : 0;
+
+      // Find high score (from completed games)
+      const highScoreEntry = playersList
         .filter(player => endedGameSet.has(player.game_id))
         .reduce((top, player) => {
           if (!top || (player.total_score || 0) > (top.total_score || 0)) {
@@ -189,29 +370,90 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           return top;
         }, null as any);
 
-      const playerActivity: Record<string, { name: string; games: number }> = {};
+      // Find low score (from completed games, must have a score > 0)
+      const lowScoreEntry = playersList
+        .filter(player => endedGameSet.has(player.game_id) && (player.total_score || 0) > 0)
+        .reduce((lowest, player) => {
+          if (!lowest || (player.total_score || 0) < (lowest.total_score || Infinity)) {
+            return player;
+          }
+          return lowest;
+        }, null as any);
+
+      // Track player activity with total scores for average calculation
+      const playerActivity: Record<string, { name: string; games: number; totalScore: number }> = {};
       playersList.forEach((player) => {
         const key = player.user_id || `guest-${player.player_name}`;
         const displayName = getPlayerLabel(player);
         if (!playerActivity[key]) {
-          playerActivity[key] = { name: displayName, games: 0 };
+          playerActivity[key] = { name: displayName, games: 0, totalScore: 0 };
         }
         playerActivity[key].games += 1;
+        // Only count scores from completed games
+        if (endedGameSet.has(player.game_id)) {
+          playerActivity[key].totalScore += player.total_score || 0;
+        }
       });
 
       const mostActivePlayers = Object.values(playerActivity)
         .sort((a, b) => b.games - a.games)
-        .slice(0, 3);
+        .slice(0, 20)
+        .map(p => ({
+          name: p.name,
+          games: p.games,
+          avgScore: p.games > 0 ? Math.round(p.totalScore / p.games) : 0,
+        }));
+
+      // Calculate overall longest bust streak (across all players, within single games)
+      let overallLongestBustStreak = 0;
+      let overallLongestBustStreakPlayerId: string | null = null;
+      if (turnsList.length > 0) {
+        // Group turns by game_id + player_id (each player's turns in each game)
+        const turnsByGamePlayer: Record<string, any[]> = {};
+        turnsList.forEach(turn => {
+          const key = `${turn.game_id}-${turn.player_id}`;
+          if (!turnsByGamePlayer[key]) {
+            turnsByGamePlayer[key] = [];
+          }
+          turnsByGamePlayer[key].push(turn);
+        });
+
+        // Find longest bust streak across all game-player combinations
+        Object.entries(turnsByGamePlayer).forEach(([key, playerTurns]) => {
+          playerTurns.sort((a, b) => (a.turn_number || 0) - (b.turn_number || 0));
+          let currentStreak = 0;
+          playerTurns.forEach(turn => {
+            if (turn.is_bust) {
+              currentStreak++;
+              if (currentStreak > overallLongestBustStreak) {
+                overallLongestBustStreak = currentStreak;
+                overallLongestBustStreakPlayerId = turn.player_id;
+              }
+            } else {
+              currentStreak = 0;
+            }
+          });
+        });
+      }
+
+      // Look up the player name for longest bust streak
+      const bustStreakPlayer = overallLongestBustStreakPlayerId
+        ? playersList.find(p => p.id === overallLongestBustStreakPlayerId)
+        : null;
+      const bustStreakPlayerName = bustStreakPlayer ? getPlayerLabel(bustStreakPlayer) : '—';
 
       setOverallStats({
         totalGames: totalGamesTracked,
-        activeGames: activeGamesTracked,
-        completedGames: completedGamesTracked,
-        totalPlayers,
         averagePlayersPerGame,
-        topScore: topScoreEntry?.total_score || 0,
-        topScorePlayer: topScoreEntry ? getPlayerLabel(topScoreEntry) : '—',
+        averageRoundsPerGame,
+        highScore: highScoreEntry?.total_score || 0,
+        highScorePlayer: highScoreEntry ? getPlayerLabel(highScoreEntry) : '—',
+        lowScore: lowScoreEntry?.total_score || 0,
+        lowScorePlayer: lowScoreEntry ? getPlayerLabel(lowScoreEntry) : '—',
+        averageScorePerRound: overallAvgScorePerRound,
         mostActivePlayers,
+        longestBustStreak: overallLongestBustStreak,
+        longestBustStreakPlayer: bustStreakPlayerName,
       });
     } catch (err) {
       console.error('Error loading stats', err);
@@ -224,8 +466,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
-        <Text style={styles.loadingText}>Crunching the numbers...</Text>
+        <ThemedLoader text="Crunching the numbers..." />
       </View>
     );
   }
@@ -237,15 +478,36 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.sectionTitle}>My Stats</Text>
         {userStats ? (
-          <View style={styles.cardGrid}>
-            <StatCard label="Games Played" value={userStats.totalGames} />
-            <StatCard label="Active Games" value={userStats.activeGames} />
-            <StatCard label="Completed Games" value={userStats.completedGames} />
-            <StatCard label="Wins" value={userStats.wins} />
-            <StatCard label="Best Score" value={userStats.bestScore} />
-            <StatCard label="Avg. Score" value={formatNumber(userStats.averageScore)} />
-            <StatCard label="Avg. Turns/Game" value={formatNumber(userStats.averageTurnsPerGame)} />
-            <StatCard label="Best Turn" value={userStats.bestTurn} subtext="Highest single non-bust turn" />
+          <View style={styles.masonryContainer}>
+            <View style={styles.masonryColumn}>
+              <StatCard label="Games Played" value={userStats.totalGames} />
+              <ClickableStatCard
+                label="Best Score"
+                value={userStats.bestScore}
+                onPress={() => setActiveModal('bestScore')}
+                disabled={!userStats.bestScoreGame}
+              />
+              <StatCard label="Avg. Score/Round" value={Math.round(userStats.averageScorePerRound)} />
+              <StatCard label="Longest Bust Streak" value={userStats.longestBustStreak} />
+            </View>
+            <View style={styles.masonryColumn}>
+              <StatCard
+                label="Wins"
+                value={userStats.totalGames > 0 ? `${userStats.wins} (${Math.round((userStats.wins / userStats.totalGames) * 100)}%)` : userStats.wins}
+              />
+              <ClickableStatCard
+                label="Avg. Score"
+                value={Math.round(userStats.averageScore)}
+                onPress={() => setActiveModal('avgScore')}
+                disabled={userStats.completedGames.length === 0}
+              />
+              <ClickableStatCard
+                label="Best Turn"
+                value={userStats.bestTurn}
+                onPress={() => setActiveModal('bestTurn')}
+                disabled={!userStats.bestTurnDetail}
+              />
+            </View>
           </View>
         ) : (
           <Text style={styles.emptyText}>No personal stats yet.</Text>
@@ -254,36 +516,78 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         <Text style={styles.sectionTitle}>Overall</Text>
         {overallStats ? (
           <>
-            <View style={styles.cardGrid}>
-              <StatCard label="Total Games" value={overallStats.totalGames} />
-              <StatCard label="Active Games" value={overallStats.activeGames} />
-              <StatCard label="Completed" value={overallStats.completedGames} />
-              <StatCard
-                label="Avg Players/Game"
-                value={formatNumber(overallStats.averagePlayersPerGame)}
-              />
-              <StatCard label="Total Players" value={overallStats.totalPlayers} />
-              <StatCard
-                label="Top Score"
-                value={overallStats.topScore}
-                subtext={`By ${overallStats.topScorePlayer}`}
-              />
+            <View style={styles.masonryContainer}>
+              <View style={styles.masonryColumn}>
+                <StatCard label="Total Games" value={overallStats.totalGames} />
+                <StatCard
+                  label="Avg Rounds/Game"
+                  value={Math.round(overallStats.averageRoundsPerGame)}
+                />
+                <StatCard
+                  label="Low Score"
+                  value={overallStats.lowScore}
+                  subtext={overallStats.lowScore > 0 ? `By ${overallStats.lowScorePlayer}` : undefined}
+                />
+                <StatCard
+                  label="Longest Bust Streak"
+                  value={overallStats.longestBustStreak}
+                  subtext={overallStats.longestBustStreak > 0 ? `By ${overallStats.longestBustStreakPlayer}` : undefined}
+                />
+              </View>
+              <View style={styles.masonryColumn}>
+                <StatCard
+                  label="Avg Players/Game"
+                  value={formatNumber(overallStats.averagePlayersPerGame)}
+                />
+                <StatCard
+                  label="High Score"
+                  value={overallStats.highScore}
+                  subtext={`By ${overallStats.highScorePlayer}`}
+                />
+                <StatCard
+                  label="Avg Turn Score"
+                  value={Math.round(overallStats.averageScorePerRound)}
+                />
+              </View>
             </View>
 
             <View style={styles.listCard}>
-              <Text style={styles.listTitle}>Most Active Players</Text>
-              {overallStats.mostActivePlayers.length === 0 ? (
+              <View style={styles.listHeader}>
+                <Text style={styles.listTitle}>Most Active Players</Text>
+                <View style={styles.sortToggle}>
+                  <TouchableOpacity
+                    style={[styles.sortButton, playerSortMode === 'games' && styles.sortButtonActive]}
+                    onPress={() => setPlayerSortMode('games')}
+                  >
+                    <Text style={[styles.sortButtonText, playerSortMode === 'games' && styles.sortButtonTextActive]}>
+                      Games
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sortButton, playerSortMode === 'avgScore' && styles.sortButtonActive]}
+                    onPress={() => setPlayerSortMode('avgScore')}
+                  >
+                    <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
+                      Avg Score
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {sortedPlayers.length === 0 ? (
                 <Text style={styles.emptyText}>No data yet.</Text>
               ) : (
-                overallStats.mostActivePlayers.map((player, index) => (
-                  <View key={player.name + index} style={styles.listRow}>
-                    <Text style={styles.listRank}>{index + 1}</Text>
-                    <View style={styles.listContent}>
-                      <Text style={styles.listName}>{player.name}</Text>
-                      <Text style={styles.listSubtext}>{player.games} games</Text>
+                <ScrollView style={styles.playersList} nestedScrollEnabled>
+                  {sortedPlayers.map((player, index) => (
+                    <View key={player.name + index} style={styles.listRow}>
+                      <Text style={styles.listRank}>{index + 1}</Text>
+                      <View style={styles.listContent}>
+                        <Text style={styles.listName}>{player.name}</Text>
+                        <Text style={styles.listSubtext}>{player.games} games</Text>
+                      </View>
+                      <Text style={styles.listAvgScore}>{player.avgScore}</Text>
                     </View>
-                  </View>
-                ))
+                  ))}
+                </ScrollView>
               )}
             </View>
           </>
@@ -291,6 +595,116 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           <Text style={styles.emptyText}>Overall stats will show up once games are played.</Text>
         )}
       </ScrollView>
+
+      {/* Best Score Detail Modal */}
+      <Modal
+        visible={activeModal === 'bestScore'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Best Score</Text>
+            {userStats?.bestScoreGame && (
+              <View style={styles.modalGameCard}>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Game Code:</Text>
+                  <Text style={styles.modalGameValue}>{userStats.bestScoreGame.joinCode}</Text>
+                </View>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Score:</Text>
+                  <Text style={styles.modalGameValueHighlight}>{userStats.bestScoreGame.score}</Text>
+                </View>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Date:</Text>
+                  <Text style={styles.modalGameValue}>{userStats.bestScoreGame.date}</Text>
+                </View>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setActiveModal(null)}
+            >
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Best Turn Detail Modal */}
+      <Modal
+        visible={activeModal === 'bestTurn'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Best Turn</Text>
+            {userStats?.bestTurnDetail && (
+              <View style={styles.modalGameCard}>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Score:</Text>
+                  <Text style={styles.modalGameValueHighlight}>{userStats.bestTurnDetail.score}</Text>
+                </View>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Round:</Text>
+                  <Text style={styles.modalGameValue}>{userStats.bestTurnDetail.turnNumber}</Text>
+                </View>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Game Code:</Text>
+                  <Text style={styles.modalGameValue}>{userStats.bestTurnDetail.joinCode}</Text>
+                </View>
+                <View style={styles.modalGameRow}>
+                  <Text style={styles.modalGameLabel}>Date:</Text>
+                  <Text style={styles.modalGameValue}>{userStats.bestTurnDetail.date}</Text>
+                </View>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setActiveModal(null)}
+            >
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Avg Score Games List Modal */}
+      <Modal
+        visible={activeModal === 'avgScore'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentLarge}>
+            <Text style={styles.modalTitle}>Completed Games</Text>
+            <Text style={styles.modalSubtitle}>
+              Average: {Math.round(userStats?.averageScore || 0)} points across {userStats?.completedGames.length || 0} games
+            </Text>
+            <ScrollView style={styles.modalGamesList}>
+              {userStats?.completedGames.map((game, index) => (
+                <View key={game.gameId + index} style={styles.modalGamesListRow}>
+                  <View style={styles.modalGamesListInfo}>
+                    <Text style={styles.modalGamesListCode}>{game.joinCode}</Text>
+                    <Text style={styles.modalGamesListDate}>{game.date}</Text>
+                  </View>
+                  <Text style={styles.modalGamesListScore}>{game.score}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setActiveModal(null)}
+            >
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -319,9 +733,17 @@ const createStyles = ({ colors }: Theme) =>
       gap: 12,
       marginBottom: 16,
     },
+    masonryContainer: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 16,
+    },
+    masonryColumn: {
+      flex: 1,
+      gap: 12,
+    },
     statCard: {
       backgroundColor: colors.surface,
-      width: '48%',
       borderRadius: 10,
       padding: 14,
       shadowColor: colors.textPrimary,
@@ -359,11 +781,40 @@ const createStyles = ({ colors }: Theme) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
+    listHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
     listTitle: {
       fontSize: 16,
       fontWeight: '700',
       color: colors.textPrimary,
-      marginBottom: 10,
+    },
+    sortToggle: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    sortButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceSecondary,
+    },
+    sortButtonActive: {
+      backgroundColor: colors.accent,
+    },
+    sortButtonText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    sortButtonTextActive: {
+      color: colors.buttonText,
+    },
+    playersList: {
+      maxHeight: 300,
     },
     listRow: {
       flexDirection: 'row',
@@ -391,6 +842,13 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 13,
       color: colors.textSecondary,
     },
+    listAvgScore: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      minWidth: 50,
+      textAlign: 'right',
+    },
     emptyText: {
       textAlign: 'center',
       color: colors.textSecondary,
@@ -413,5 +871,134 @@ const createStyles = ({ colors }: Theme) =>
       marginBottom: 8,
       fontSize: 14,
       textAlign: 'center',
+    },
+    // Clickable stat card styles
+    clickableStatCard: {
+      borderColor: colors.accent,
+      borderWidth: 1.5,
+    },
+    clickableStatCardDisabled: {
+      borderColor: colors.border,
+      borderWidth: 1,
+      opacity: 0.7,
+    },
+    statCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    clickableIndicator: {
+      fontSize: 14,
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 340,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalContentLarge: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      maxHeight: '70%',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    modalGameCard: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 10,
+      padding: 16,
+      marginBottom: 20,
+    },
+    modalGameRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 6,
+    },
+    modalGameLabel: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    modalGameValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    modalGameValueHighlight: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+    modalGamesList: {
+      maxHeight: 300,
+      marginBottom: 16,
+    },
+    modalGamesListRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    modalGamesListInfo: {
+      flex: 1,
+    },
+    modalGamesListCode: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    modalGamesListDate: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    modalGamesListScore: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.accent,
+      minWidth: 60,
+      textAlign: 'right',
+    },
+    modalCloseButton: {
+      backgroundColor: colors.buttonSecondary,
+      paddingVertical: 14,
+      borderRadius: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalCloseButtonText: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: '600',
     },
   });

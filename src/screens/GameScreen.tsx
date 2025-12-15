@@ -6,12 +6,12 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator,
   TextInput,
   Modal,
   Dimensions,
   Platform,
 } from 'react-native';
+import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import {
   getGamePlayers,
@@ -691,7 +691,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
+        <ThemedLoader text="Loading game..." />
       </View>
     );
   }

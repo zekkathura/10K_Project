@@ -37,7 +37,12 @@
       "Bash(cmd /c:*)",
       "Bash(powershell -Command:*)",
       "Bash(npx rimraf:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(node -e:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(npx playwright test:*)"
     ],
     "deny": [],
     "ask": []

@@ -19,10 +19,9 @@
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
-  display_name TEXT,
-  registered_name TEXT,
-  player_type TEXT DEFAULT 'Registered',
-  registration_type TEXT DEFAULT 'Prod',
+  display_name TEXT NOT NULL,
+  full_name TEXT,  -- Immutable, from OAuth provider (admin reference only)
+  theme_mode TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

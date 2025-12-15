@@ -17,6 +17,7 @@
 id            UUID NOT NULL PK (→ auth.users.id)
 email         TEXT NOT NULL
 display_name  TEXT NOT NULL  (required, user's display name)
+full_name     TEXT           (immutable, from OAuth provider - admin reference only)
 created_at    TIMESTAMP WITH TIME ZONE
 updated_at    TIMESTAMP WITH TIME ZONE
 theme_mode    TEXT
@@ -78,6 +79,22 @@ created_at   TIMESTAMP WITH TIME ZONE
 ```
 
 **RLS:** Users can view/add/update/delete turns in their games
+
+---
+
+### extra_rules (House rules)
+```
+id           UUID NOT NULL PK
+rule_number  INTEGER NOT NULL
+text         TEXT NOT NULL
+proposer     TEXT             (who proposed the rule)
+approved_by  TEXT             (comma-separated names)
+revoked_by   TEXT             (comma-separated names - if set, rule is revoked)
+rule_date    DATE
+created_at   TIMESTAMP WITH TIME ZONE
+```
+
+**RLS:** All authenticated users can read. Only admin (service_role) can modify.
 
 ---
 
