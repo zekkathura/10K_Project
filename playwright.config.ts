@@ -3,9 +3,20 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright Configuration for E2E Tests
  *
- * Run with: npx playwright test
- * Run with UI: npx playwright test --ui
+ * Two test modes:
+ * 1. Default (chromium): Tests basic UI against production server (port 8081)
+ *    - Run: npm run test:e2e
+ *    - Auto-starts: npm start -- --port 8081
+ *
+ * 2. Dev (dev-chromium): Tests with login against dev server (port 8082)
+ *    - First start: npm run start:test (in separate terminal)
+ *    - Then run: npm run test:e2e:dev
+ *    - Uses 10k-dev Supabase with test users
  */
+
+// Check if testing against dev server
+const isDevTest = process.env.PLAYWRIGHT_PROJECT === 'dev-chromium' ||
+                  process.argv.includes('--project=dev-chromium');
 
 export default defineConfig({
   // Test directory
@@ -31,9 +42,6 @@ export default defineConfig({
 
   // Shared settings for all projects
   use: {
-    // Base URL for the app
-    baseURL: 'http://localhost:8081',
-
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
 
@@ -48,21 +56,30 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:8081',
+      },
+      // Only run non-login tests (grep out tests that need auth)
+      grep: /@noauth|Edge Cases|Visual/,
+    },
+    {
+      name: 'dev-chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:8082',
+      },
+      // Run all tests including login tests
     },
     // Uncomment for additional browser testing
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
     // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
   ],
 
-  // Run local dev server before starting tests
-  webServer: {
+  // Run local dev server before starting tests (only for default chromium project)
+  webServer: isDevTest ? undefined : {
     command: 'npm start -- --port 8081',
     url: 'http://localhost:8081',
     reuseExistingServer: !process.env.CI,

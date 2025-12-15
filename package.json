@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
+    "start:test": "dotenv -e .env.test.app -- expo start --port 8082 --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -11,9 +12,10 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest --testPathPattern='unit'",
-    "test:e2e": "npx playwright test",
+    "test:e2e": "npx playwright test --project=chromium",
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:dev": "npx playwright test --project=dev-chromium",
     "test:all": "npm run test && npm run test:e2e"
   },
   "dependencies": {
@@ -41,6 +43,7 @@
     "babel-jest": "^29.7.0",
     "babel-plugin-inline-dotenv": "^1.7.0",
     "babel-preset-expo": "^54.0.8",
+    "dotenv-cli": "^11.0.0",
     "jest": "^29.7.0",
     "jest-expo": "~54.0.16",
     "react-test-renderer": "19.1.0",

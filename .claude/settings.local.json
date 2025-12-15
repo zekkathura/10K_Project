@@ -43,7 +43,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx playwright install:*)",
       "Bash(npx playwright test:*)",
-      "Bash(npm run test:e2e:*)"
+      "Bash(npm run test:e2e:*)",
+      "Bash(npm run start:test:*)",
+      "Bash(timeout /t 15 /nobreak)",
+      "Bash(npm run test:e2e:dev:*)"
     ],
     "deny": [],
     "ask": []
