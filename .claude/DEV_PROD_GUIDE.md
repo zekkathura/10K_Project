@@ -226,14 +226,96 @@ TRUNCATE turns, game_players, games, profiles CASCADE;
 ## Google Cloud OAuth
 
 Currently using **one OAuth client** for both environments:
+- **Account**: tuesdaylabs.dev@gmail.com
+- **Client ID**: `1093429431588-21hos0ib9ckco2eguu6eubbhgriof1ql.apps.googleusercontent.com`
 - Redirect URIs point to respective Supabase auth callbacks
 - Both prod and dev Supabase projects work with the same client
+
+**OAuth Consent Screen Status**: Testing (requires test users to be added)
+- Test users: `blinkafailed@gmail.com`, `tuesdaylabs.dev@gmail.com`
+- To add more: Google Cloud Console → OAuth consent screen → Test users
 
 If needed, you can create separate OAuth clients:
 1. Google Cloud Console → APIs & Services → Credentials
 2. Create OAuth 2.0 Client ID → "10K Development"
 3. Add dev-specific redirect URIs
 4. Update `10k-dev` → Authentication → Providers → Google with new client ID
+
+## Mobile Testing (Expo Go vs Development Build)
+
+### Option 1: Development Build (Recommended for Consistent Testing)
+
+Build a development APK with a stable custom URL scheme. This is the most reliable way to test OAuth on mobile.
+
+```bash
+# Build development APK
+eas build --profile development --platform android
+
+# Download and install the APK on your device
+```
+
+**Benefits**:
+- Stable redirect URL: `com.10kscorekeeper://`
+- No need to update Supabase URLs each session
+- Works offline (doesn't need tunnel)
+- Better approximation of production behavior
+
+**Setup**:
+1. The redirect URL `com.10kscorekeeper://` is already in Supabase 10k-prod
+2. Build the APK: `eas build --profile development --platform android`
+3. Install on device via download or `adb install`
+4. Google OAuth will use the stable custom scheme
+
+### Option 2: Expo Go (Quick Testing)
+
+Expo Go uses dynamic `exp://` URLs that change each tunnel session.
+
+```bash
+# Start tunnel
+npx expo start --tunnel
+
+# Note the URL (e.g., exp://exud4dm-tuesdaylabs-8082.exp.direct)
+# This URL changes each time you restart the tunnel!
+```
+
+**Manual Setup Each Session**:
+1. Start tunnel: `npx expo start --tunnel`
+2. Copy the exp:// URL from the terminal
+3. Add URL to Supabase 10k-prod → Authentication → URL Configuration → Redirect URLs
+4. Test OAuth login on phone
+
+**Why exp:// URLs Change**:
+- Expo's ngrok tunnel assigns different subdomains each session
+- The URL includes your username and a random hash
+- Cannot use wildcards (`exp://*`) - Supabase requires exact matches
+
+### Option 3: Expo Go with Wildcard (May Not Work)
+
+Supabase might support wildcard patterns:
+```
+exp://*.exp.direct
+```
+
+Try adding this to redirect URLs. If it works, no manual updates needed.
+
+### Redirect URL Summary
+
+| Platform | Redirect URL | Where Configured |
+|----------|--------------|------------------|
+| Web | `https://kpzczvjazzinnugzluhj.supabase.co` | Supabase (static) |
+| Dev Build | `com.10kscorekeeper://` | Supabase + app.config.js scheme |
+| Expo Go | `exp://[random]-tuesdaylabs-8082.exp.direct` | Supabase (manual each session) |
+
+### How OAuth Flow Works on Mobile
+
+1. User taps "Sign in with Google"
+2. App calls `AuthSession.makeRedirectUri()` to get redirect URL
+3. Supabase generates Google OAuth URL with redirect
+4. `WebBrowser.openAuthSessionAsync()` opens browser
+5. User authenticates with Google
+6. Google redirects to Supabase callback
+7. Supabase redirects to app's redirect URL with tokens
+8. App extracts tokens from URL fragment and sets session
 
 ## Checklist: New Feature Development
 

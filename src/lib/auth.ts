@@ -1,22 +1,46 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { logger } from './logger';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Get redirect URL based on environment
+function getRedirectUrl(): string {
+  // Web uses current origin
+  if (Platform.OS === 'web') {
+    return window.location.origin;
+  }
+
+  // For mobile, use AuthSession.makeRedirectUri() which handles:
+  // - Expo Go: Returns exp:// URL that Expo Go can intercept
+  // - Standalone builds: Returns the app's custom scheme
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: Constants.expoConfig?.scheme || 'com.10kscorekeeper',
+    // Don't use path for OAuth - tokens come in fragment
+  });
+
+  return redirectUri;
+}
+
 export async function signInWithGoogle() {
   try {
-    // For web, use simple OAuth redirect
+    const redirectTo = getRedirectUrl();
+    logger.debug('Google Auth - Platform:', Platform.OS);
+    logger.debug('Google Auth - Redirect URL:', redirectTo);
+    logger.debug('Google Auth - App Ownership:', Constants.appOwnership);
+
+    // For web, use simple OAuth redirect (page will redirect)
     if (Platform.OS === 'web') {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo,
           queryParams: {
-            prompt: 'select_account', // Always show account picker
+            prompt: 'select_account',
           },
         },
       });
@@ -25,20 +49,14 @@ export async function signInWithGoogle() {
       return { success: true };
     }
 
-    // For mobile (Expo Go / native), use Expo proxy
-    const redirectTo = AuthSession.makeRedirectUri({
-      useProxy: true,
-    });
-
-    logger.debug('Google Auth - Platform:', Platform.OS);
-
+    // For mobile (Expo Go / native), use browser-based OAuth
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
         skipBrowserRedirect: true,
         queryParams: {
-          prompt: 'select_account', // Always show account picker
+          prompt: 'select_account',
         },
       },
     });
@@ -46,20 +64,41 @@ export async function signInWithGoogle() {
     if (error) throw error;
 
     if (data?.url) {
-      logger.debug('Opening OAuth session');
+      logger.debug('Opening OAuth session with URL');
+      logger.debug('OAuth URL (first 100 chars):', data.url.substring(0, 100));
 
-      const result = await WebBrowser.openAuthSessionAsync(
-        data.url,
-        redirectTo
-      );
+      let result;
+      try {
+        result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectTo
+        );
+        logger.debug('WebBrowser result:', JSON.stringify(result, null, 2));
+      } catch (browserError) {
+        logger.error('WebBrowser.openAuthSessionAsync error:', browserError);
+        return { success: false, error: browserError };
+      }
 
       logger.debug('WebBrowser result type:', result.type);
 
       if (result.type === 'success') {
         const { url } = result;
-        const params = new URLSearchParams(url.split('#')[1]);
+        logger.debug('Callback URL received (first 100 chars):', url.substring(0, 100));
+
+        // Parse tokens from URL fragment (after #)
+        const fragmentString = url.split('#')[1];
+        logger.debug('Fragment exists:', !!fragmentString);
+
+        const params = new URLSearchParams(fragmentString);
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
+        const errorParam = params.get('error');
+        const errorDescription = params.get('error_description');
+
+        if (errorParam) {
+          logger.error('OAuth error in callback:', errorParam, errorDescription);
+          return { success: false, error: errorDescription || errorParam };
+        }
 
         logger.debug('Tokens found:', { access: !!accessToken, refresh: !!refreshToken });
 

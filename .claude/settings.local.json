@@ -52,7 +52,11 @@
       "Bash(eas build:*)",
       "Bash(eas build:list:*)",
       "Bash(del:*)",
-      "Bash(npx expo-doctor)"
+      "Bash(npx expo-doctor)",
+      "Bash(git rm:*)",
+      "Bash(npx eas secret:create:*)",
+      "Bash(npx eas:*)",
+      "Bash(timeout /t 5 /nobreak)"
     ],
     "deny": [],
     "ask": []
