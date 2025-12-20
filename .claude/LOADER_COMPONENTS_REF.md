@@ -134,6 +134,60 @@ import { ThemedLoader } from '../components';
 
 ---
 
+### ThemedAlert (Alerts)
+
+Cross-platform modal alert component that respects dark/light theme.
+Use instead of native `Alert.alert()` for consistent styling.
+
+**Location:** `src/components/ThemedAlert.tsx`
+
+**Usage:**
+```tsx
+import { useThemedAlert } from '../components';
+
+function MyComponent() {
+  const alert = useThemedAlert();
+
+  const handleAction = () => {
+    alert.show({
+      title: 'Confirm',
+      message: 'Are you sure?',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteItem() },
+      ],
+    });
+  };
+}
+```
+
+**Setup (in App.tsx):**
+```tsx
+import { ThemedAlertProvider } from './components';
+
+export default function App() {
+  return (
+    <ThemedAlertProvider>
+      {/* app content */}
+    </ThemedAlertProvider>
+  );
+}
+```
+
+**Options:**
+| Property | Type | Description |
+|----------|------|-------------|
+| `title` | `string` | Alert title |
+| `message` | `string` | Alert message |
+| `buttons` | `AlertButton[]` | Array of buttons (optional, defaults to 'OK') |
+
+**Button styles:**
+- `default` - Primary button style
+- `cancel` - Secondary/cancel style
+- `destructive` - Red/danger style
+
+---
+
 ## File Structure
 
 ```
@@ -142,6 +196,7 @@ src/components/
   DiceLoader.tsx        # Web-only 3D dice animation
   NativeDiceLoader.tsx  # Mobile-only 2D dice animation
   ThemedLoader.tsx      # Cross-platform wrapper (use this)
+  ThemedAlert.tsx       # Cross-platform modal alerts (use this)
 ```
 
 ## Notes

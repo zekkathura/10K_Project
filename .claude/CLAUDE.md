@@ -110,6 +110,9 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Loading UX: Cycling humorous messages on Stats/Games screens, 1-second minimum display
 - ✅ Themed alerts: "No Game Selected" uses custom Modal respecting dark/light theme
 - ✅ Env cleanup: Simplified to `.env` + `.env.alternatives` + `.env.test`
+- ✅ Guest validation: Guest player names validated with `validatePlayerName()` before DB insertion
+- ✅ ThemedAlert: Cross-platform modal alert component for consistent dark/light mode
+- ✅ Delete account: `deleteAccount()` function anonymizes game history, deletes profile
 
 ## Environments
 
@@ -181,13 +184,12 @@ npm run test:all       # Run all tests
 
 **Key paths:**
 - Screens: `src/screens/`
-- Shared components: `src/components/` (ThemedLoader, DiceLoader)
+- Shared components: `src/components/` (ThemedLoader, DiceLoader, ThemedAlert)
 - Components reference: `.claude/LOADER_COMPONENTS_REF.md`
 - Color palette: `.claude/COLORS_REF.md` (theme colors reference)
 - Database schema: `.claude/DATABASE_QUICK_REF.md` (AI quick reference - table columns)
 - Database RLS policies: `.claude/RLS_POLICIES_REF.md` (AI quick reference - security policies)
 - Database DDL: `database/CURRENT_SCHEMA.sql` (full authoritative schema)
-- Database migrations: `database/migrations/` (one-time schema evolution scripts)
 - Database verification: `database/verification/` (check current state)
 - Database utilities: `database/manual/` (manual operations like claim, clear data, prod cleanup)
 - Tests: `__tests__/` (all tests)
