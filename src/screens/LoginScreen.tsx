@@ -13,12 +13,13 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedLoader } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
 import { signInWithGoogle } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';  // Used for email auth
 import { logger } from '../lib/logger';
 
 const REMEMBER_ME_KEY = '10k-remember-me';
@@ -27,6 +28,8 @@ const REMEMBER_ME_KEY = '10k-remember-me';
 const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+
   // Logo wiggle animation
   const wiggleAnim = useRef(new Animated.Value(0)).current;
 
@@ -116,42 +119,9 @@ export default function LoginScreen() {
         showAlert('Error', 'Failed to sign in with Google');
         return;
       }
-
-      // After successful Google sign-in, ensure profile exists
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Check if profile exists
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        // If no profile, create one
-        if (!profile) {
-          const displayName = user.user_metadata?.full_name ||
-                             user.user_metadata?.name ||
-                             user.email?.split('@')[0] ||
-                             'User';
-
-          logger.debug('Creating profile for Google OAuth user');
-
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email: user.email!,
-              display_name: displayName,
-            });
-
-          if (profileError) {
-            logger.error('Profile creation error', profileError);
-            showAlert('Profile Error', 'Failed to create profile. Please try again.');
-          } else {
-            logger.debug('Profile created successfully');
-          }
-        }
-      }
+      // Profile creation is handled by App.tsx's ProfileSetupModal
+      // This avoids race conditions between LoginScreen and App.tsx
+      logger.debug('Google sign-in successful, App.tsx will handle profile setup');
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred');
       logger.error('Google sign-in error', error);
@@ -286,59 +256,68 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.container}>
-          {/* Top accent bar */}
-          <View style={styles.accentBar} />
+    <View style={styles.flex}>
+      {/* FIXED HEADER - accent bar, logo, tabs */}
+      <View style={[styles.fixedHeader, { paddingTop: insets.top }]}>
+        <View style={styles.accentBar} />
 
-          <View style={styles.content}>
-            {/* Logo section */}
-            <View style={styles.logoSection}>
-              <Animated.View style={[styles.logoContainer, { transform: [{ rotate: rotation }] }]}>
-                <Image
-                  source={require('../../assets/images/10k_logo.png')}
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
-              </Animated.View>
-              <View style={styles.titleContainer}>
-                <Text style={styles.title}>10K Scorekeeper</Text>
-                <Text style={styles.subtitle}>Track your dice game victories</Text>
-              </View>
+        <View style={styles.headerContent}>
+          {/* Logo section */}
+          <View style={styles.logoSection}>
+            <Animated.View style={[styles.logoContainer, { transform: [{ rotate: rotation }] }]}>
+              <Image
+                source={require('../../assets/images/10k_logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </Animated.View>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>10K Scorekeeper</Text>
+              <Text style={styles.subtitle}>Track your dice game victories</Text>
             </View>
+          </View>
 
-            {/* Tabs - underline style */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={styles.tab}
-                onPress={() => switchMode('signin')}
-                accessibilityLabel="Sign in tab"
-                accessibilityRole="tab"
-                accessibilityState={{ selected: mode === 'signin' }}
-              >
-                <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
-                  SIGN IN
-                </Text>
-                <View style={[styles.tabUnderline, mode === 'signin' && styles.tabUnderlineActive]} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.tab}
-                onPress={() => switchMode('signup')}
-                accessibilityLabel="Sign up tab"
-                accessibilityRole="tab"
-                accessibilityState={{ selected: mode === 'signup' }}
-              >
-                <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
-                  SIGN UP
-                </Text>
-                <View style={[styles.tabUnderline, mode === 'signup' && styles.tabUnderlineActive]} />
-              </TouchableOpacity>
-            </View>
+          {/* Tabs - underline style */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => switchMode('signin')}
+              accessibilityLabel="Sign in tab"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === 'signin' }}
+            >
+              <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
+                SIGN IN
+              </Text>
+              <View style={[styles.tabUnderline, mode === 'signin' && styles.tabUnderlineActive]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tab}
+              onPress={() => switchMode('signup')}
+              accessibilityLabel="Sign up tab"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === 'signup' }}
+            >
+              <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
+                SIGN UP
+              </Text>
+              <View style={[styles.tabUnderline, mode === 'signup' && styles.tabUnderlineActive]} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
+      {/* SCROLLABLE FORM CONTENT */}
+      <KeyboardAvoidingView
+        style={styles.scrollContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formWrapper}>
             {/* Form */}
             <View style={styles.form}>
               <Text style={styles.label}>EMAIL</Text>
@@ -522,63 +501,69 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          {/* Spacer to push dice to bottom */}
-          <View style={styles.spacer} />
-
-          {/* Bottom dice decoration */}
-          <View style={styles.diceContainer}>
-            {DICE_FACES.map((die, i) => (
-              <View key={i} style={styles.diceWrapper}>
-                <Text style={styles.diceIcon}>{die}</Text>
-              </View>
-            ))}
-          </View>
+      {/* FIXED FOOTER - dice decoration + safe area */}
+      <View style={styles.fixedFooter}>
+        <View style={styles.diceContainer}>
+          {DICE_FACES.map((die, i) => (
+            <View key={i} style={styles.diceWrapper}>
+              <Text style={styles.diceIcon}>{die}</Text>
+            </View>
+          ))}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        {/* Safe area spacer below dice */}
+        <View style={[styles.safeAreaSpacer, { height: insets.bottom }]} />
+      </View>
+    </View>
   );
 }
 
 const createStyles = ({ colors, mode }: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.background },
+    fixedHeader: {
+      backgroundColor: colors.background,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerContent: {
+      paddingHorizontal: 32,
+      paddingTop: 16,
+      paddingBottom: 0,
+      maxWidth: 400,
+      width: '100%',
+      alignSelf: 'center',
+    },
+    scrollContainer: {
+      flex: 1,
+    },
     scroll: {
       flexGrow: 1,
-      backgroundColor: colors.background,
+      paddingBottom: 12,
     },
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
+    formWrapper: {
+      paddingHorizontal: 32,
+      paddingTop: 12,
+      maxWidth: 400,
+      width: '100%',
+      alignSelf: 'center',
     },
     accentBar: {
       height: 4,
       backgroundColor: colors.accent,
     },
-    content: {
-      paddingHorizontal: 32,
-      paddingTop: 40,
-      paddingBottom: 20,
-      maxWidth: 400,
-      width: '100%',
-      alignSelf: 'center',
-      zIndex: 2,
-    },
-    spacer: {
-      flex: 1,
-      minHeight: 40,
-      zIndex: 0,
-    },
     logoSection: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
-      marginBottom: 28,
+      gap: 12,
+      marginBottom: 12,
     },
     logoContainer: {
-      width: 64,
-      height: 64,
-      borderRadius: 12,
+      width: 56,
+      height: 56,
+      borderRadius: 10,
       overflow: 'hidden',
     },
     logo: {
@@ -589,26 +574,26 @@ const createStyles = ({ colors, mode }: Theme) =>
       flex: 1,
     },
     title: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: '700',
       color: colors.textPrimary,
       letterSpacing: -0.5,
     },
     subtitle: {
-      fontSize: 13,
+      fontSize: 12,
       color: colors.textSecondary,
-      marginTop: 4,
+      marginTop: 2,
       opacity: 0.7,
     },
     tabContainer: {
       flexDirection: 'row',
       gap: 24,
-      marginBottom: 24,
+      marginBottom: 0,
       borderBottomWidth: 2,
       borderBottomColor: colors.border,
     },
     tab: {
-      paddingBottom: 12,
+      paddingBottom: 10,
       marginBottom: -2,
     },
     tabText: {
@@ -632,16 +617,16 @@ const createStyles = ({ colors, mode }: Theme) =>
       backgroundColor: colors.accent,
     },
     form: {
-      gap: 12,
-      marginBottom: 20,
+      gap: 8,
+      marginBottom: 14,
     },
     label: {
       color: colors.textSecondary,
       fontSize: 11,
       fontWeight: '600',
       letterSpacing: 1,
-      marginBottom: 6,
-      marginTop: 4,
+      marginBottom: 4,
+      marginTop: 2,
     },
     input: {
       width: '100%',
@@ -649,8 +634,8 @@ const createStyles = ({ colors, mode }: Theme) =>
       borderWidth: 2,
       borderColor: colors.border,
       borderRadius: 4,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
       fontSize: 15,
       color: colors.inputText,
       // On web, remove default browser outline - we handle focus styling manually
@@ -682,7 +667,7 @@ const createStyles = ({ colors, mode }: Theme) =>
     },
     inputField: {
       flex: 1,
-      paddingVertical: 14,
+      paddingVertical: 10,
       paddingHorizontal: 0,
       fontSize: 15,
       color: colors.inputText,
@@ -735,10 +720,10 @@ const createStyles = ({ colors, mode }: Theme) =>
     },
     primaryButton: {
       backgroundColor: colors.accent,
-      paddingVertical: 16,
+      paddingVertical: 12,
       borderRadius: 4,
       alignItems: 'center',
-      marginTop: 8,
+      marginTop: 6,
     },
     primaryButtonDisabled: {
       opacity: 0.7,
@@ -753,7 +738,7 @@ const createStyles = ({ colors, mode }: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 16,
-      marginBottom: 20,
+      marginBottom: 14,
     },
     separatorLine: {
       flex: 1,
@@ -774,7 +759,7 @@ const createStyles = ({ colors, mode }: Theme) =>
     },
     googleButton: {
       backgroundColor: 'transparent',
-      paddingVertical: 14,
+      paddingVertical: 10,
       borderRadius: 4,
       flexDirection: 'row',
       alignItems: 'center',
@@ -796,22 +781,27 @@ const createStyles = ({ colors, mode }: Theme) =>
       height: 22,
       opacity: 0.6,
     },
-    diceContainer: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'stretch',
-      gap: 8,
-      height: 72,
+    fixedFooter: {
       backgroundColor: colors.surface,
       borderTopWidth: 1,
       borderTopColor: colors.border,
+    },
+    diceContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 6,
+      height: 56,
+    },
+    safeAreaSpacer: {
+      backgroundColor: colors.surface,
     },
     diceWrapper: {
       justifyContent: 'center',
       alignItems: 'center',
     },
     diceIcon: {
-      fontSize: 44,
+      fontSize: 36,
       color: mode === 'dark' ? 'rgba(255, 255, 255, 0.75)' : '#1a3a6e',
     },
   });

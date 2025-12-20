@@ -1,0 +1,37 @@
+# Helper: Login with test user (returning user with profile)
+# NOT a standalone test - called via runFlow from other tests
+#
+# Prerequisites:
+# - testuser1@10k.test exists in 10k-dev Supabase Auth
+# - testuser1 has a profile in profiles table
+#
+# Usage: runFlow: "../helpers/_login.yaml"
+
+appId: com.tenk.scorekeeper.previewdev
+---
+# Wait for login screen
+- extendedWaitUntil:
+    visible: "LOG IN"
+    timeout: 10000
+
+# Enter email
+- tapOn: "you@example.com"
+- inputText: "testuser1@10k.test"
+
+# Enter password
+- tapOn: "Enter password"
+- inputText: "TestPassword123!"
+
+# Tap login button
+- tapOn: "LOG IN"
+
+# Wait for home screen (returning user goes straight to Home)
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 20000
+
+# Dismiss any error dialogs that may appear
+- tapOn:
+    text: "OK"
+    optional: true
+    retryTapIfNoChange: false

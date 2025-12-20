@@ -1,5 +1,7 @@
-import { registerRootComponent } from 'expo';
+// URL polyfill must be first - required for Supabase on React Native
+import 'react-native-url-polyfill/auto';
 
+import { registerRootComponent } from 'expo';
 import App from './src/App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

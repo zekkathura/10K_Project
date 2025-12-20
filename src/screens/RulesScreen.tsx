@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { ThemedLoader } from '../components';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface ExtraRule {
   id: string;
@@ -15,6 +20,30 @@ interface ExtraRule {
 }
 
 type RulesTab = 'normal' | 'extra';
+type SectionKey = 'scoring' | 'winCondition' | 'turnOrder' | 'standardRound' | 'example';
+
+// Scoring data for native table
+const SCORING_DATA = {
+  singles: [
+    { dice: '1', points: '100' },
+    { dice: '5', points: '50' },
+  ],
+  triples: [
+    { dice: '1-1-1', points: '1,000' },
+    { dice: '2-2-2', points: '200' },
+    { dice: '3-3-3', points: '300' },
+    { dice: '4-4-4', points: '400' },
+    { dice: '5-5-5', points: '500' },
+    { dice: '6-6-6', points: '600' },
+  ],
+  special: [
+    { combo: 'Straight (1-2-3-4-5-6)', points: '1,500' },
+    { combo: 'Three Pairs', points: '1,500' },
+    { combo: 'Four of a Kind', points: '2× Triple' },
+    { combo: 'Five of a Kind', points: '4× Triple' },
+    { combo: 'Six of a Kind', points: '8× Triple' },
+  ],
+};
 
 export default function RulesScreen() {
   const styles = useThemedStyles(createStyles);
@@ -23,6 +52,110 @@ export default function RulesScreen() {
   const [extraRules, setExtraRules] = useState<ExtraRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<SectionKey>>(new Set(['scoring']));
+
+  const toggleSection = (section: SectionKey) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
+  const CollapsibleSection = ({
+    sectionKey,
+    title,
+    icon,
+    children
+  }: {
+    sectionKey: SectionKey;
+    title: string;
+    icon: string;
+    children: React.ReactNode;
+  }) => {
+    const isExpanded = expandedSections.has(sectionKey);
+    return (
+      <View style={styles.collapsibleCard}>
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => toggleSection(sectionKey)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleTitleRow}>
+            <Text style={styles.sectionIcon}>{icon}</Text>
+            <Text style={styles.collapsibleTitle}>{title}</Text>
+          </View>
+          <Text style={styles.expandIcon}>{isExpanded ? '−' : '+'}</Text>
+        </TouchableOpacity>
+        {isExpanded && (
+          <View style={styles.collapsibleContent}>
+            {children}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const ScoringTable = () => (
+    <View style={styles.scoringContainer}>
+      {/* Singles */}
+      <View style={styles.scoringSection}>
+        <Text style={styles.scoringCategoryTitle}>Single Dice</Text>
+        <View style={styles.scoringGrid}>
+          {SCORING_DATA.singles.map((item, idx) => (
+            <View key={idx} style={styles.scoringRow}>
+              <Text style={styles.scoringDice}>{item.dice}</Text>
+              <Text style={styles.scoringPoints}>{item.points}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Triples */}
+      <View style={styles.scoringSection}>
+        <Text style={styles.scoringCategoryTitle}>Three of a Kind</Text>
+        <View style={styles.scoringGrid}>
+          {SCORING_DATA.triples.map((item, idx) => (
+            <View key={idx} style={styles.scoringRow}>
+              <Text style={styles.scoringDice}>{item.dice}</Text>
+              <Text style={styles.scoringPoints}>{item.points}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Special Combos */}
+      <View style={styles.scoringSection}>
+        <Text style={styles.scoringCategoryTitle}>Special Combos</Text>
+        <View style={styles.scoringGridWide}>
+          {SCORING_DATA.special.map((item, idx) => (
+            <View key={idx} style={styles.scoringRowWide}>
+              <Text style={styles.scoringCombo}>{item.combo}</Text>
+              <Text style={styles.scoringPoints}>{item.points}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+
+  const ExampleStep = ({ step, roll, action, result }: { step: number; roll: string; action: string; result: string }) => (
+    <View style={styles.exampleStep}>
+      <View style={styles.exampleStepHeader}>
+        <View style={styles.exampleStepNumber}>
+          <Text style={styles.exampleStepNumberText}>{step}</Text>
+        </View>
+        <Text style={styles.exampleRoll}>Rolled: {roll}</Text>
+      </View>
+      <Text style={styles.exampleAction}>{action}</Text>
+      <Text style={styles.exampleResult}>{result}</Text>
+    </View>
+  );
 
   useEffect(() => {
     if (activeTab === 'extra' && extraRules.length === 0) {
@@ -65,52 +198,87 @@ export default function RulesScreen() {
 
   const renderNormalRules = () => (
     <View style={styles.section}>
-      <Text style={styles.subheader}>Win condition</Text>
-      <Text style={styles.body}>
-        Highest score wins after a player ends a turn above 10,000 with all six dice scoring and chooses not to reroll.
-      </Text>
+      {/* Scoring - Most accessed, expanded by default */}
+      <CollapsibleSection sectionKey="scoring" title="Scoring" icon="🎯">
+        <Text style={styles.body}>
+          Points for dice rolled in a single hand. Combos don't combine with previously banked dice.
+        </Text>
+        <ScoringTable />
+      </CollapsibleSection>
 
-      <Text style={styles.subheader}>Choosing turn order</Text>
-      <Text style={styles.body}>Each player rolls 1 die; highest goes first. Reroll ties. Play proceeds left.</Text>
+      {/* Winning the Game (combines Win Condition + End Game) */}
+      <CollapsibleSection sectionKey="winCondition" title="Winning the Game" icon="🏆">
+        <Text style={styles.body}>To win, you must meet all three conditions on a single turn:</Text>
+        <View style={styles.bulletList}>
+          <Text style={styles.bulletItem}>• Score above 10,000 total points</Text>
+          <Text style={styles.bulletItem}>• All 6 dice are scoring dice</Text>
+          <Text style={styles.bulletItem}>• Choose to stop (not reroll)</Text>
+        </View>
+        <View style={styles.tipBox}>
+          <Text style={styles.tipTitle}>Final Round</Text>
+          <Text style={styles.tipText}>The first player to qualify triggers the final round. Everyone else gets one last turn to meet the conditions and beat the score.</Text>
+        </View>
+      </CollapsibleSection>
 
-      <Text style={styles.subheader}>Standard round</Text>
-      <Text style={styles.body}>
-        Roll 6 dice; bank scoring dice (banked dice don't combine with later rolls), reroll the rest. If nothing scores,
-        you bust (turn = 0). If all 6 score, bank them and reroll all 6, adding on. Bank 500+ once to get on the board;
-        afterward you may bank any score. A turn ends when you stop or bust.
-      </Text>
+      {/* Turn Order */}
+      <CollapsibleSection sectionKey="turnOrder" title="Turn Order" icon="🔄">
+        <Text style={styles.body}>
+          Each player rolls 1 die; highest goes first. Reroll ties. Play proceeds to the left.
+        </Text>
+      </CollapsibleSection>
 
-      <Text style={styles.subheader}>Scoring</Text>
-      <Text style={styles.body}>
-        Scoring for dice rolled in a single hand. Combos don't combine with dice previously banked for points.
-      </Text>
-      <Image source={require('../../assets/images/rules.jpg')} style={styles.image} resizeMode="contain" />
+      {/* Standard Round */}
+      <CollapsibleSection sectionKey="standardRound" title="How to Play a Round" icon="🎲">
+        <View style={styles.bulletList}>
+          <Text style={styles.bulletItem}>• Roll all 6 dice</Text>
+          <Text style={styles.bulletItem}>• Bank scoring dice (banked dice can't combine with later rolls)</Text>
+          <Text style={styles.bulletItem}>• Reroll remaining dice, or stop and keep your points</Text>
+          <Text style={styles.bulletItem}>• If nothing scores, you <Text style={styles.boldText}>bust</Text> (lose all points this turn)</Text>
+          <Text style={styles.bulletItem}>• If all 6 dice score, bank them and reroll all 6, adding to your total</Text>
+        </View>
+        <View style={styles.tipBox}>
+          <Text style={styles.tipTitle}>💡 Getting on the Board</Text>
+          <Text style={styles.tipText}>You must bank 500+ points in a single turn to get on the board. After that, you can bank any amount.</Text>
+        </View>
+      </CollapsibleSection>
 
-      <Text style={styles.subheader}>Example round</Text>
-      <Text style={styles.body}>
-        {'Rolled 1,1,5,2,3,4\n'}
-        {'→ Score: 1 (100), 1 (100), 5 (50); 2,3,4 = 0\n'}
-        {'→ Bank 1 (100), reroll 5,2,3,4\n'}
-        {'Rolled 3,3,3,4,2\n'}
-        {'→ Bank triple 3s (300); reroll 4,2\n'}
-        {'Rolled 1,5\n'}
-        {'→ Bank 1 (100) and 5 (50). Turn = 550 if you stop\n'}
-        {'Alternatively, reroll all 6 and continue\n'}
-        {'→ Choose to reroll all 6 dice\n'}
-        {'Rolled 1,1,1,2,6,6\n'}
-        {'→ Bank triple 1s (1000); Turn score 1550 if you stop;  reroll 2,6,6\n'}
-        {'→ Rolled 3,2,6\n'}
-        {"→ No die scores; bust and lose this round's points\n"}
-      </Text>
+      {/* Example Round */}
+      <CollapsibleSection sectionKey="example" title="Example Round" icon="📝">
+        <ExampleStep
+          step={1}
+          roll="1, 1, 5, 2, 3, 4"
+          action="Bank one 1 (100 pts), reroll the 5, 2, 3, 4"
+          result="Running total: 100"
+        />
+        <ExampleStep
+          step={2}
+          roll="3, 3, 3, 4, 2"
+          action="Bank triple 3s (300 pts), reroll 4, 2"
+          result="Running total: 400"
+        />
+        <ExampleStep
+          step={3}
+          roll="1, 5"
+          action="Bank 1 (100) and 5 (50). All 6 dice scored!"
+          result="Running total: 550 — Can stop here OR reroll all 6"
+        />
+        <ExampleStep
+          step={4}
+          roll="1, 1, 1, 2, 6, 6"
+          action="Bank triple 1s (1,000 pts), reroll 2, 6, 6"
+          result="Running total: 1,550"
+        />
+        <View style={styles.exampleBust}>
+          <View style={styles.exampleStepHeader}>
+            <View style={[styles.exampleStepNumber, styles.bustStepNumber]}>
+              <Text style={styles.exampleStepNumberText}>5</Text>
+            </View>
+            <Text style={styles.exampleRoll}>Rolled: 3, 2, 6</Text>
+          </View>
+          <Text style={styles.bustText}>💥 BUST! No scoring dice — lose all 1,550 points</Text>
+        </View>
+      </CollapsibleSection>
 
-      <Text style={styles.subheader}>End game</Text>
-      <Text style={styles.body}>
-        {'First player to do all of the following triggers end game condition. \n'}
-        {'→ Close above 10,000 points\n'}
-        {'→ All 6 die are scoring die\n'}
-        {'→ Choose not to reroll\n'}
-        {'Everyone else gets one last turn. Highest closing score that meets the below condition wins.\n'}
-      </Text>
     </View>
   );
 
@@ -253,10 +421,202 @@ const createStyles = ({ colors }: Theme) =>
     },
 
     // Normal Rules
-    section: { marginBottom: 20 },
+    section: { marginBottom: 20, gap: 12 },
     subheader: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 12, marginBottom: 4 },
-    image: { width: '100%', height: 240, marginTop: 12, marginBottom: 8 },
     body: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+    boldText: { fontWeight: '700', color: colors.textPrimary },
+
+    // Collapsible Sections
+    collapsibleCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    collapsibleHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 14,
+      backgroundColor: colors.surface,
+    },
+    collapsibleTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    sectionIcon: {
+      fontSize: 20,
+    },
+    collapsibleTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    expandIcon: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.accent,
+      width: 24,
+      textAlign: 'center',
+    },
+    collapsibleContent: {
+      padding: 14,
+      paddingTop: 0,
+      borderTopWidth: 1,
+      borderTopColor: colors.divider,
+    },
+
+    // Scoring Table
+    scoringContainer: {
+      marginTop: 12,
+      gap: 16,
+    },
+    scoringSection: {
+      gap: 8,
+    },
+    scoringCategoryTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    scoringGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    scoringRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      minWidth: 90,
+      justifyContent: 'space-between',
+    },
+    scoringGridWide: {
+      gap: 6,
+    },
+    scoringRowWide: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      justifyContent: 'space-between',
+    },
+    scoringDice: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    scoringCombo: {
+      fontSize: 14,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    scoringPoints: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.accent,
+      minWidth: 50,
+      textAlign: 'right',
+    },
+
+    // Bullet Lists
+    bulletList: {
+      marginTop: 8,
+      gap: 6,
+    },
+    bulletItem: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      paddingLeft: 4,
+    },
+
+    // Tip Box
+    tipBox: {
+      marginTop: 12,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      padding: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.accent,
+    },
+    tipTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 4,
+    },
+    tipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+
+    // Example Steps
+    exampleStep: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 10,
+    },
+    exampleStepHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 8,
+    },
+    exampleStepNumber: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    exampleStepNumberText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.buttonText,
+    },
+    exampleRoll: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    exampleAction: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    exampleResult: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.success,
+    },
+    exampleBust: {
+      backgroundColor: colors.error + '20',
+      borderRadius: 10,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.error,
+    },
+    bustStepNumber: {
+      backgroundColor: colors.error,
+    },
+    bustText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.error,
+    },
 
     // Extra Rules
     extraRulesContainer: {

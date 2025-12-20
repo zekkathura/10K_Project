@@ -40,6 +40,29 @@ eas build --profile production --platform android
 eas build --profile production --platform ios
 ```
 
+### EAS Account Details (Verified)
+
+| Setting | Value |
+|---------|-------|
+| **Account** | `tuesdaylabs` |
+| **Project** | `@tuesdaylabs/10k-scorekeeper` |
+| **CLI Version** | `>= 5.0.0` |
+
+**Configured Secrets** (EAS Dashboard → Project → Secrets):
+- `DEV_SUPABASE_URL` - 10k-dev Supabase URL
+- `DEV_SUPABASE_ANON_KEY` - 10k-dev anon key
+- `PROD_SUPABASE_URL` - 10k-prod Supabase URL
+- `PROD_SUPABASE_ANON_KEY` - 10k-prod anon key
+
+**eas.json Profile → Secret Mapping**:
+| Profile | Secrets Used |
+|---------|--------------|
+| `development` | `DEV_SUPABASE_URL`, `DEV_SUPABASE_ANON_KEY` |
+| `preview` | `PROD_SUPABASE_URL`, `PROD_SUPABASE_ANON_KEY` |
+| `production` | `PROD_SUPABASE_URL`, `PROD_SUPABASE_ANON_KEY` |
+
+**Previous Builds**: Successfully built Android preview APKs (can verify with `eas build:list`)
+
 ### Prerequisites
 
 1. **Install EAS CLI**: `npm install -g eas-cli`
@@ -49,11 +72,21 @@ eas build --profile production --platform ios
 
 ### Environment Variables for Builds
 
-Set in EAS dashboard (Project → Secrets):
-- `EXPO_PUBLIC_SUPABASE_URL` - Your Supabase URL
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
+Secrets are **already configured** in EAS Dashboard (see "EAS Account Details" above).
 
-Or set per-profile in `eas.json` under `build.<profile>.env`.
+The `eas.json` file references these secrets using `${SECRET_NAME}` syntax:
+```json
+"env": {
+  "EXPO_PUBLIC_SUPABASE_URL": "${PROD_SUPABASE_URL}",
+  "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${PROD_SUPABASE_ANON_KEY}"
+}
+```
+
+**To verify secrets**: `eas secret:list`
+
+**To add/update secrets**:
+- Via CLI: `eas secret:create --name SECRET_NAME --value "secret_value"`
+- Via Dashboard: EAS Project → Secrets
 
 ## Supabase Projects
 
@@ -309,13 +342,18 @@ Try adding this to redirect URLs. If it works, no manual updates needed.
 ### How OAuth Flow Works on Mobile
 
 1. User taps "Sign in with Google"
-2. App calls `AuthSession.makeRedirectUri()` to get redirect URL
+2. App determines redirect URL based on environment:
+   - **Standalone builds**: Uses explicit `com.10kscorekeeper://` (via `Constants.appOwnership`)
+   - **Expo Go**: Uses `AuthSession.makeRedirectUri()` for `exp://` URLs
 3. Supabase generates Google OAuth URL with redirect
 4. `WebBrowser.openAuthSessionAsync()` opens browser
 5. User authenticates with Google
 6. Google redirects to Supabase callback
 7. Supabase redirects to app's redirect URL with tokens
 8. App extracts tokens from URL fragment and sets session
+9. App.tsx's `checkProfile` detects new user → shows ProfileSetupModal
+
+**Important**: `AuthSession.makeRedirectUri()` can return `localhost:8081` in standalone builds, which breaks OAuth. The fix in `src/lib/auth.ts` explicitly uses the app scheme for standalone builds.
 
 ## Checklist: New Feature Development
 

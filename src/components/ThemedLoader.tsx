@@ -3,7 +3,7 @@
  *
  * Cross-platform loading indicator that uses:
  * - 3D tumbling dice animation on web (DiceLoader)
- * - Standard ActivityIndicator on native (iOS/Android)
+ * - 2D animated dice on native iOS/Android (NativeDiceLoader)
  *
  * Supports two modes:
  * - "fullPage": Centered dice with "Loading..." text (for screen loading states)
@@ -14,6 +14,7 @@ import React from 'react';
 import { View, Text, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import { useTheme } from '../lib/theme';
 import DiceLoader from './DiceLoader';
+import NativeDiceLoader from './NativeDiceLoader';
 
 interface ThemedLoaderProps {
   /**
@@ -56,7 +57,7 @@ const ThemedLoader: React.FC<ThemedLoaderProps> = ({
     );
   }
 
-  // Full page mode - dice on web, spinner on native
+  // Full page mode - dice animation on all platforms
   const isWeb = Platform.OS === 'web';
 
   return (
@@ -64,7 +65,7 @@ const ThemedLoader: React.FC<ThemedLoaderProps> = ({
       {isWeb ? (
         <DiceLoader size={70} />
       ) : (
-        <ActivityIndicator size="large" color={loaderColor} />
+        <NativeDiceLoader size={70} />
       )}
       {!hideText && (
         <Text style={[styles.text, { color: theme.colors.textSecondary }]}>

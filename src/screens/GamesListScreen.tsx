@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
+  SectionList,
   Alert,
   Modal,
   TextInput,
 } from 'react-native';
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
-import { getMyGames, joinGameByCode, getJoinableGamesWithFriends } from '../lib/database';
+import { getMyGames, joinGameByCode } from '../lib/database';
 import { Game } from '../lib/types';
 import CreateGameScreen from './CreateGameScreen';
 import { Theme, useThemedStyles } from '../lib/theme';
@@ -32,13 +32,13 @@ export default function GamesListScreen({
   reloadTrigger = 0,
 }: GamesListScreenProps) {
   const [games, setGames] = useState<Game[]>([]);
-  const [joinableGames, setJoinableGames] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateScreen, setShowCreateScreen] = useState(false);
   const [userId, setUserId] = useState<string>('');
   const [userDisplayName, setUserDisplayName] = useState<string>('');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+  const lastCreateTrigger = useRef(createGameTrigger);
   const styles = useThemedStyles(createStyles);
   const activeGames = useMemo(() => {
     const filtered = games
@@ -60,20 +60,21 @@ export default function GamesListScreen({
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [games]);
 
-  const sortedJoinableGames = useMemo(() => {
-    return [...joinableGames].sort((a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }, [joinableGames]);
+  const sections = useMemo(() => [
+    { title: `My Active Games (${activeGames.length})`, data: activeGames, type: 'active' as const },
+    { title: `My Completed Games (${completedGames.length})`, data: completedGames, type: 'completed' as const },
+  ], [activeGames, completedGames]);
 
   useEffect(() => {
     loadGames();
   }, []);
 
   useEffect(() => {
-    if (createGameTrigger > 0) {
+    // Only show create screen when trigger actually increments (not on re-render with same value)
+    if (createGameTrigger > lastCreateTrigger.current) {
       setShowCreateScreen(true);
     }
+    lastCreateTrigger.current = createGameTrigger;
   }, [createGameTrigger]);
 
   useEffect(() => {
@@ -138,10 +139,6 @@ export default function GamesListScreen({
           onGameSelect(firstActive.id, false);
         }
       }
-
-      // Load joinable games with friends
-      const friendGames = await getJoinableGamesWithFriends(user.id);
-      setJoinableGames(friendGames);
     } catch (error) {
       console.error('Error loading games:', error);
     } finally {
@@ -153,21 +150,6 @@ export default function GamesListScreen({
     setShowCreateScreen(false);
     loadGames();
     onGameSelect(gameId);
-  };
-
-  const handleJoinFriendGame = async (game: any) => {
-    try {
-      const { gameId } = await joinGameByCode(
-        game.join_code,
-        userId,
-        userDisplayName
-      );
-
-      loadGames();
-      onGameSelect(gameId);
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to join game');
-    }
   };
 
   const handleJoinByCode = async () => {
@@ -225,21 +207,31 @@ export default function GamesListScreen({
         </TouchableOpacity>
       </View>
 
-      {/* Active Games Section */}
-      <Text style={styles.sectionTitle}>My Active Games ({activeGames.length})</Text>
-      <FlatList
-        data={activeGames}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeaderContainer}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+          </View>
+        )}
+        renderItem={({ item, section }) => {
           const createdDate = new Date(item.created_at).toLocaleDateString();
           const isSelected = selectedGameId === item.id;
+          const isCompleted = section.type === 'completed';
+          const winnerName = (item as any).winner_name;
+
           return (
             <TouchableOpacity
-              style={[styles.gameCard, isSelected && styles.selectedCard]}
+              style={[
+                styles.gameCard,
+                isSelected && styles.selectedCard,
+                isCompleted && styles.completedCard,
+              ]}
               onPress={() => onGameSelect(item.id)}
-              accessibilityLabel={`Game ${item.join_code || 'unknown'}${isSelected ? ', selected' : ''}`}
+              accessibilityLabel={`${isCompleted ? 'Completed game' : 'Game'} ${item.join_code || 'unknown'}${isSelected ? ', selected' : ''}${winnerName ? `, winner ${winnerName}` : ''}`}
               accessibilityRole="button"
-              accessibilityHint="Tap to open this game"
+              accessibilityHint={isCompleted ? 'Tap to view this completed game' : 'Tap to open this game'}
             >
               <View style={styles.gameInfo}>
                 <Text style={styles.gameName}>
@@ -247,71 +239,6 @@ export default function GamesListScreen({
                   <Text style={styles.gameCode}>{item.join_code || '------'}</Text>
                 </Text>
                 {isSelected && <Text style={styles.selectedBadge}>Selected</Text>}
-                <View style={styles.gameDetails}>
-                  <Text style={styles.gameDetailText}>📅 {createdDate}</Text>
-                  <Text style={styles.gameDetailText}>👥 {(item as any).player_count || 0} players</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No active games. Create or join one!</Text>
-        }
-        style={styles.gamesList}
-      />
-
-      {/* Active Friend Games Section */}
-      <Text style={styles.sectionTitle}>Live Matches with Recent Players ({sortedJoinableGames.length})</Text>
-      <FlatList
-        data={sortedJoinableGames}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.gameCard, styles.joinableGameCard]}
-            onPress={() => handleJoinFriendGame(item)}
-            accessibilityLabel={`Join game ${item.join_code} created by ${item.creator_name}`}
-            accessibilityRole="button"
-            accessibilityHint="Tap to join this game"
-          >
-            <View style={styles.gameInfo}>
-              <Text style={styles.gameName}>
-                  <Text style={styles.gameNameLabel}>Game code: </Text>
-                  <Text style={styles.gameCode}>{item.join_code}</Text>
-                </Text>
-              <View style={styles.gameDetails}>
-                <Text style={styles.gameDetailText}>Creator: {item.creator_name}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
-        style={styles.gamesListSmall}
-        ListEmptyComponent={
-          <Text style={styles.emptyTextSmall}>None available</Text>
-        }
-      />
-
-      {/* Completed Games Section */}
-      <Text style={styles.sectionTitle}>My Completed Games ({completedGames.length})</Text>
-      <FlatList
-        data={completedGames}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          const createdDate = new Date(item.created_at).toLocaleDateString();
-          const winnerName = (item as any).winner_name;
-          return (
-            <TouchableOpacity
-              style={[styles.gameCard, styles.completedCard]}
-              onPress={() => onGameSelect(item.id)}
-              accessibilityLabel={`Completed game ${item.join_code}${winnerName ? `, winner ${winnerName}` : ''}`}
-              accessibilityRole="button"
-              accessibilityHint="Tap to view this completed game"
-            >
-              <View style={styles.gameInfo}>
-                <Text style={styles.gameName}>
-                  <Text style={styles.gameNameLabel}>Game code: </Text>
-                  <Text style={styles.gameCode}>{item.join_code}</Text>
-                </Text>
                 <View style={styles.gameDetails}>
                   <Text style={styles.gameDetailText}>📅 {createdDate}</Text>
                   <Text style={styles.gameDetailText}>👥 {(item as any).player_count || 0} players</Text>
@@ -323,10 +250,16 @@ export default function GamesListScreen({
             </TouchableOpacity>
           );
         }}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No completed games yet</Text>
+        renderSectionFooter={({ section }) =>
+          section.data.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {section.type === 'active' ? 'No active games. Create or join one!' : 'No completed games yet'}
+            </Text>
+          ) : null
         }
-        style={styles.gamesListCompact}
+        stickySectionHeadersEnabled={false}
+        style={styles.sectionList}
+        contentContainerStyle={styles.sectionListContent}
       />
 
       {/* Join Game Modal */}
@@ -421,59 +354,36 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 16,
       fontWeight: '600',
     },
+    sectionList: {
+      flex: 1,
+    },
+    sectionListContent: {
+      paddingHorizontal: 6,
+      paddingBottom: 20,
+    },
+    sectionHeaderContainer: {
+      backgroundColor: colors.background,
+      paddingTop: 12,
+      paddingBottom: 6,
+    },
     sectionTitle: {
       fontSize: 18,
       fontWeight: '600',
       color: colors.textPrimary,
-      marginBottom: 6,
-      marginLeft: 6,
-    },
-    gamesList: {
-      flexGrow: 0,
-      flexShrink: 0,
-      minHeight: 160,
-      maxHeight: 180,
-      marginBottom: 14,
-      paddingLeft: 6,
-    },
-    gamesListSmall: {
-      flexGrow: 0,
-      flexShrink: 0,
-      minHeight: 60,
-      maxHeight: 90,
-      marginBottom: 14,
-      paddingLeft: 6,
-    },
-    gamesListCompact: {
-      flexGrow: 1,
-      flexShrink: 1,
-      marginBottom: 14,
-      paddingLeft: 6,
     },
     gameCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       padding: 8,
       paddingVertical: 6,
       borderRadius: 8,
       marginBottom: 4,
       position: 'relative',
-      shadowColor: colors.textPrimary,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 2,
-      elevation: 2,
       borderWidth: 1,
       borderColor: colors.border,
-    },
-    joinableGameCard: {
-      backgroundColor: colors.surfaceSecondary,
-      borderWidth: 2,
-      borderColor: colors.success,
     },
     selectedCard: {
       borderColor: colors.success,
       borderWidth: 2,
-      backgroundColor: 'rgba(76, 175, 80, 0.18)', // light green highlight for selection
     },
     selectedBadge: {
       position: 'absolute',
@@ -484,8 +394,8 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 12,
     },
     completedCard: {
-      backgroundColor: colors.surfaceSecondary,
-      opacity: 0.9,
+      borderWidth: 2,
+      borderColor: colors.accent,
     },
     gameInfo: {
       flex: 1,
@@ -517,13 +427,6 @@ const createStyles = ({ colors }: Theme) =>
       marginTop: 16,
       marginLeft: 6,
       fontSize: 16,
-    },
-    emptyTextSmall: {
-      textAlign: 'left',
-      color: colors.textSecondary,
-      marginTop: 8,
-      marginLeft: 6,
-      fontSize: 14,
     },
     modalOverlay: {
       flex: 1,
@@ -574,15 +477,15 @@ const createStyles = ({ colors }: Theme) =>
       fontWeight: '600',
     },
     modalCancelButton: {
-      backgroundColor: colors.buttonSecondary,
+      backgroundColor: 'transparent',
       padding: 14,
       borderRadius: 8,
       alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
+      borderWidth: 2,
+      borderColor: colors.textSecondary,
     },
     modalCancelButtonText: {
-      color: colors.textPrimary,
+      color: colors.textSecondary,
       fontSize: 16,
       fontWeight: '600',
     },

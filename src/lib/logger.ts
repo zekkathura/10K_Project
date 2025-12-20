@@ -16,9 +16,15 @@
 
 // Check if we're in development mode
 // __DEV__ is provided by React Native, process.env.NODE_ENV by bundlers
-const isDev = typeof __DEV__ !== 'undefined'
-  ? __DEV__
-  : process.env.NODE_ENV === 'development';
+// Wrap in try-catch to prevent crashes if __DEV__ access fails
+let isDev = false;
+try {
+  isDev = typeof __DEV__ !== 'undefined'
+    ? __DEV__
+    : process.env.NODE_ENV === 'development';
+} catch {
+  isDev = false;
+}
 
 // PII patterns to sanitize
 const PII_PATTERNS = [

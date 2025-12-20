@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, RefreshControl } from 'react-native';
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
@@ -66,6 +66,7 @@ type DetailModal = 'bestScore' | 'bestTurn' | 'avgScore' | null;
 
 export default function GameStatsScreen({ navigation, onOpenProfile }: GameStatsScreenProps) {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,31 +83,52 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
     </View>
   );
 
+  const HighlightStatCard = ({ label, value, subtext, variant = 'accent' }: {
+    label: string;
+    value: string | number;
+    subtext?: string;
+    variant?: 'accent' | 'success' | 'warning';
+  }) => (
+    <View style={[styles.statCard, styles.highlightStatCard, styles[`highlight${variant.charAt(0).toUpperCase() + variant.slice(1)}` as keyof typeof styles]]}>
+      <Text style={[styles.statValue, styles.highlightStatValue]}>{value}</Text>
+      <Text style={[styles.statLabel, styles.highlightStatLabel]}>{label}</Text>
+      {subtext ? <Text style={[styles.statSubtext, styles.highlightStatSubtext]}>{subtext}</Text> : null}
+    </View>
+  );
+
   const ClickableStatCard = ({
     label,
     value,
     subtext,
     onPress,
-    disabled
+    disabled,
+    highlight
   }: {
     label: string;
     value: string | number;
     subtext?: string;
     onPress: () => void;
     disabled?: boolean;
+    highlight?: boolean;
   }) => (
     <TouchableOpacity
-      style={[styles.statCard, styles.clickableStatCard, disabled && styles.clickableStatCardDisabled]}
+      style={[
+        styles.statCard,
+        styles.clickableStatCard,
+        highlight && styles.highlightStatCard,
+        highlight && styles.highlightAccent,
+        disabled && styles.clickableStatCardDisabled
+      ]}
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.7}
     >
       <View style={styles.statCardHeader}>
-        <Text style={styles.statValue}>{value}</Text>
-        {!disabled && <Text style={styles.clickableIndicator}>ℹ️</Text>}
+        <Text style={[styles.statValue, highlight && styles.highlightStatValue]}>{value}</Text>
+        {!disabled && <Text style={[styles.clickableIndicator, highlight && styles.highlightClickableIndicator]}>View ›</Text>}
       </View>
-      <Text style={styles.statLabel}>{label}</Text>
-      {subtext ? <Text style={styles.statSubtext}>{subtext}</Text> : null}
+      <Text style={[styles.statLabel, highlight && styles.highlightStatLabel]}>{label}</Text>
+      {subtext ? <Text style={[styles.statSubtext, highlight && styles.highlightStatSubtext]}>{subtext}</Text> : null}
     </TouchableOpacity>
   );
 
@@ -124,8 +146,16 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
     loadStats();
   }, []);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  }, []);
+
   const loadStats = async () => {
-    setLoading(true);
+    if (!refreshing) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -475,104 +505,116 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
     <View style={styles.container}>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionTitle}>My Stats</Text>
-        {userStats ? (
-          <View style={styles.masonryContainer}>
-            <View style={styles.masonryColumn}>
-              <StatCard label="Games Played" value={userStats.totalGames} />
-              <ClickableStatCard
-                label="Best Score"
-                value={userStats.bestScore}
-                onPress={() => setActiveModal('bestScore')}
-                disabled={!userStats.bestScoreGame}
-              />
-              <StatCard label="Avg. Score/Round" value={Math.round(userStats.averageScorePerRound)} />
-              <StatCard label="Longest Bust Streak" value={userStats.longestBustStreak} />
-            </View>
-            <View style={styles.masonryColumn}>
-              <StatCard
-                label="Wins"
-                value={userStats.totalGames > 0 ? `${userStats.wins} (${Math.round((userStats.wins / userStats.totalGames) * 100)}%)` : userStats.wins}
-              />
-              <ClickableStatCard
-                label="Avg. Score"
-                value={Math.round(userStats.averageScore)}
-                onPress={() => setActiveModal('avgScore')}
-                disabled={userStats.completedGames.length === 0}
-              />
-              <ClickableStatCard
-                label="Best Turn"
-                value={userStats.bestTurn}
-                onPress={() => setActiveModal('bestTurn')}
-                disabled={!userStats.bestTurnDetail}
-              />
-            </View>
-          </View>
-        ) : (
-          <Text style={styles.emptyText}>No personal stats yet.</Text>
-        )}
-
-        <Text style={styles.sectionTitle}>Overall</Text>
-        {overallStats ? (
-          <>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.accent}
+            colors={[theme.colors.accent]}
+          />
+        }
+      >
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>My Stats</Text>
+          {userStats ? (
             <View style={styles.masonryContainer}>
               <View style={styles.masonryColumn}>
-                <StatCard label="Total Games" value={overallStats.totalGames} />
-                <StatCard
-                  label="Avg Rounds/Game"
-                  value={Math.round(overallStats.averageRoundsPerGame)}
+                <HighlightStatCard
+                  label="Wins"
+                  value={userStats.totalGames > 0 ? `${userStats.wins}` : '0'}
+                  subtext={userStats.totalGames > 0 ? `${Math.round((userStats.wins / userStats.totalGames) * 100)}% win rate` : undefined}
+                  variant="success"
                 />
-                <StatCard
-                  label="Low Score"
-                  value={overallStats.lowScore}
-                  subtext={overallStats.lowScore > 0 ? `By ${overallStats.lowScorePlayer}` : undefined}
+                <ClickableStatCard
+                  label="Best Score"
+                  value={userStats.bestScore}
+                  onPress={() => setActiveModal('bestScore')}
+                  disabled={!userStats.bestScoreGame}
+                  highlight
                 />
-                <StatCard
-                  label="Longest Bust Streak"
-                  value={overallStats.longestBustStreak}
-                  subtext={overallStats.longestBustStreak > 0 ? `By ${overallStats.longestBustStreakPlayer}` : undefined}
-                />
+                <StatCard label="Avg. Score/Round" value={Math.round(userStats.averageScorePerRound)} />
               </View>
               <View style={styles.masonryColumn}>
-                <StatCard
-                  label="Avg Players/Game"
-                  value={formatNumber(overallStats.averagePlayersPerGame)}
+                <StatCard label="Games Played" value={userStats.totalGames} />
+                <ClickableStatCard
+                  label="Avg. Score"
+                  value={Math.round(userStats.averageScore)}
+                  onPress={() => setActiveModal('avgScore')}
+                  disabled={userStats.completedGames.length === 0}
                 />
-                <StatCard
-                  label="High Score"
-                  value={overallStats.highScore}
-                  subtext={`By ${overallStats.highScorePlayer}`}
+                <ClickableStatCard
+                  label="Best Turn"
+                  value={userStats.bestTurn}
+                  onPress={() => setActiveModal('bestTurn')}
+                  disabled={!userStats.bestTurnDetail}
                 />
-                <StatCard
-                  label="Avg Turn Score"
-                  value={Math.round(overallStats.averageScorePerRound)}
-                />
+                <StatCard label="Bust Streak" value={userStats.longestBustStreak} subtext="Longest" />
               </View>
             </View>
+          ) : (
+            <Text style={styles.emptyText}>No personal stats yet.</Text>
+          )}
+        </View>
 
-            <View style={styles.listCard}>
-              <View style={styles.listHeader}>
-                <Text style={styles.listTitle}>Most Active Players</Text>
-                <View style={styles.sortToggle}>
-                  <TouchableOpacity
-                    style={[styles.sortButton, playerSortMode === 'games' && styles.sortButtonActive]}
-                    onPress={() => setPlayerSortMode('games')}
-                  >
-                    <Text style={[styles.sortButtonText, playerSortMode === 'games' && styles.sortButtonTextActive]}>
-                      Games
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.sortButton, playerSortMode === 'avgScore' && styles.sortButtonActive]}
-                    onPress={() => setPlayerSortMode('avgScore')}
-                  >
-                    <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
-                      Avg Score
-                    </Text>
-                  </TouchableOpacity>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Overall</Text>
+          {overallStats ? (
+            <>
+              <View style={styles.masonryContainer}>
+                <View style={styles.masonryColumn}>
+                  <HighlightStatCard
+                    label="High Score"
+                    value={overallStats.highScore}
+                    subtext={`By ${overallStats.highScorePlayer}`}
+                    variant="accent"
+                  />
+                  <StatCard label="Total Games" value={overallStats.totalGames} />
+                  <StatCard
+                    label="Avg Rounds/Game"
+                    value={Math.round(overallStats.averageRoundsPerGame)}
+                  />
+                </View>
+                <View style={styles.masonryColumn}>
+                  <StatCard
+                    label="Avg Players/Game"
+                    value={formatNumber(overallStats.averagePlayersPerGame)}
+                  />
+                  <StatCard
+                    label="Avg Turn Score"
+                    value={Math.round(overallStats.averageScorePerRound)}
+                  />
+                  <StatCard
+                    label="Bust Streak"
+                    value={overallStats.longestBustStreak}
+                    subtext={overallStats.longestBustStreak > 0 ? `By ${overallStats.longestBustStreakPlayer}` : undefined}
+                  />
                 </View>
               </View>
+
+              <View style={styles.listCard}>
+                <View style={styles.listHeader}>
+                  <Text style={styles.listTitle}>Leaderboard</Text>
+                  <View style={styles.sortToggle}>
+                    <TouchableOpacity
+                      style={[styles.sortButton, playerSortMode === 'games' && styles.sortButtonActive]}
+                      onPress={() => setPlayerSortMode('games')}
+                    >
+                      <Text style={[styles.sortButtonText, playerSortMode === 'games' && styles.sortButtonTextActive]}>
+                        By Games
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortButton, playerSortMode === 'avgScore' && styles.sortButtonActive]}
+                      onPress={() => setPlayerSortMode('avgScore')}
+                    >
+                      <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
+                        By Score
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               {sortedPlayers.length === 0 ? (
                 <Text style={styles.emptyText}>No data yet.</Text>
               ) : (
@@ -594,6 +636,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         ) : (
           <Text style={styles.emptyText}>Overall stats will show up once games are played.</Text>
         )}
+        </View>
       </ScrollView>
 
       {/* Best Score Detail Modal */}
@@ -720,6 +763,12 @@ const createStyles = ({ colors }: Theme) =>
     scrollContent: {
       paddingBottom: 40,
     },
+    sectionContainer: {
+      marginBottom: 8,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
     sectionTitle: {
       fontSize: 18,
       fontWeight: '700',
@@ -768,6 +817,38 @@ const createStyles = ({ colors }: Theme) =>
       marginTop: 6,
       fontSize: 12,
       color: colors.textTertiary,
+    },
+    // Highlight stat card styles
+    highlightStatCard: {
+      borderWidth: 2,
+    },
+    highlightAccent: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    highlightSuccess: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
+    },
+    highlightWarning: {
+      backgroundColor: colors.warning || colors.accent,
+      borderColor: colors.warning || colors.accent,
+    },
+    highlightStatValue: {
+      color: colors.buttonText,
+      fontSize: 26,
+    },
+    highlightStatLabel: {
+      color: colors.buttonText,
+      opacity: 0.9,
+    },
+    highlightStatSubtext: {
+      color: colors.buttonText,
+      opacity: 0.8,
+    },
+    highlightClickableIndicator: {
+      color: colors.buttonText,
+      opacity: 0.8,
     },
     listCard: {
       backgroundColor: colors.surface,
@@ -888,7 +969,9 @@ const createStyles = ({ colors }: Theme) =>
       alignItems: 'flex-start',
     },
     clickableIndicator: {
-      fontSize: 14,
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.accent,
     },
     // Modal styles
     modalOverlay: {

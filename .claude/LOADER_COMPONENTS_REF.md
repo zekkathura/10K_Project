@@ -40,8 +40,8 @@ import { ThemedLoader } from '../components';
 | `hideText` | `boolean` | `false` | Hide text in fullPage mode |
 
 **Platform behavior:**
-- **Web (fullPage):** 3D tumbling dice animation
-- **Native (fullPage):** Standard ActivityIndicator
+- **Web (fullPage):** 3D tumbling dice animation (DiceLoader)
+- **Native (fullPage):** 2D animated dice (NativeDiceLoader)
 - **All platforms (inline):** ActivityIndicator
 
 ---
@@ -76,6 +76,36 @@ import { DiceLoader } from '../components';
 
 ---
 
+### NativeDiceLoader (Mobile Only)
+
+2D animated dice for iOS/Android that shows a tumbling dice with changing faces.
+Uses React Native's Animated API for smooth performance.
+
+**Location:** `src/components/NativeDiceLoader.tsx`
+
+**Direct usage (rare):**
+```tsx
+import { NativeDiceLoader } from '../components';
+
+// Only use directly when outside ThemeProvider context
+<NativeDiceLoader size={70} />
+```
+
+**Props:**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `number` | `60` | Dice size in pixels |
+| `speed` | `number` | `400` | Animation duration per face in ms |
+| `color` | `string` | `'#DC2626'` | Dice color (red with white dots) |
+
+**Features:**
+- 2D dice with proper dot patterns (1-6)
+- Rotation + scale animation for tumbling effect
+- Face changes mid-animation for variety
+- Uses native driver for 60fps performance
+
+---
+
 ## Migration from ActivityIndicator
 
 **Before:**
@@ -106,14 +136,16 @@ import { ThemedLoader } from '../components';
 
 ```
 src/components/
-  index.ts         # Re-exports (import from '../components')
-  DiceLoader.tsx   # Web-only 3D dice animation
-  ThemedLoader.tsx # Cross-platform wrapper (use this)
+  index.ts              # Re-exports (import from '../components')
+  DiceLoader.tsx        # Web-only 3D dice animation
+  NativeDiceLoader.tsx  # Mobile-only 2D dice animation
+  ThemedLoader.tsx      # Cross-platform wrapper (use this)
 ```
 
 ## Notes
 
-- Always prefer `ThemedLoader` over direct `DiceLoader` usage
-- The dice animation uses CSS 3D transforms (web-only)
-- Native platforms always get `ActivityIndicator` fallback
+- Always prefer `ThemedLoader` over direct loader usage
+- DiceLoader uses CSS 3D transforms (web-only)
+- NativeDiceLoader uses React Native Animated API (iOS/Android)
+- Both loaders show an animated red dice with changing faces
 - Loading text defaults to "Loading..." - customize per-context

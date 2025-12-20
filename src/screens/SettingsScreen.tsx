@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../lib/types';
@@ -28,6 +29,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   const [themeSaving, setThemeSaving] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const { theme, mode, setMode } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Track if display name has been changed
   const hasChanges = displayName !== originalDisplayName;
@@ -158,7 +160,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Text style={styles.menuLabel}>Menu</Text>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -297,7 +299,7 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
     },
     header: {
       backgroundColor: colors.surface,
-      height: 54,
+      minHeight: 54,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,

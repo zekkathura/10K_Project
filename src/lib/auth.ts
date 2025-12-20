@@ -6,7 +6,17 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { logger } from './logger';
 
-WebBrowser.maybeCompleteAuthSession();
+// Wrap in try-catch to prevent crashes during module initialization
+// This is called at module load time and can crash on some Android devices
+try {
+  WebBrowser.maybeCompleteAuthSession();
+} catch (error) {
+  // Silently fail - this is only needed for web OAuth redirects
+  console.warn('WebBrowser.maybeCompleteAuthSession failed:', error);
+}
+
+// App scheme - must match app.config.js
+const APP_SCHEME = 'com.10kscorekeeper';
 
 // Get redirect URL based on environment
 function getRedirectUrl(): string {
@@ -15,12 +25,20 @@ function getRedirectUrl(): string {
     return window.location.origin;
   }
 
-  // For mobile, use AuthSession.makeRedirectUri() which handles:
-  // - Expo Go: Returns exp:// URL that Expo Go can intercept
-  // - Standalone builds: Returns the app's custom scheme
+  // Check if this is a standalone build (not Expo Go)
+  // In standalone builds, appOwnership is null or 'standalone'
+  // In Expo Go, appOwnership is 'expo'
+  const isStandalone = Constants.appOwnership !== 'expo';
+
+  if (isStandalone) {
+    // For standalone/EAS builds, use the app's custom scheme directly
+    // This is required because AuthSession.makeRedirectUri() may return localhost
+    return `${APP_SCHEME}://`;
+  }
+
+  // For Expo Go, use AuthSession which handles exp:// URLs
   const redirectUri = AuthSession.makeRedirectUri({
-    scheme: Constants.expoConfig?.scheme || 'com.10kscorekeeper',
-    // Don't use path for OAuth - tokens come in fragment
+    scheme: APP_SCHEME,
   });
 
   return redirectUri;

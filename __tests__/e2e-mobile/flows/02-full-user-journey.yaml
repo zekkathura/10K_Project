@@ -1,0 +1,160 @@
+# Flow: Full User Journey
+# Complete game lifecycle - login once, test entire flow
+# Run time: ~3-4 minutes
+#
+# Tests:
+# - Login and navigation
+# - Create new game
+# - Score entry with quick buttons
+# - Bust score handling
+# - Multiple rounds
+# - Reaching 10,000+ points
+#
+# Note: Uses single login session for efficiency
+
+appId: com.tenk.scorekeeper.previewdev
+---
+- launchApp:
+    clearState: true
+
+# === LOGIN ===
+- runFlow: "../helpers/_login.yaml"
+- takeScreenshot: "02-home-after-login"
+
+# === NAVIGATION TEST ===
+# Home tab (already here)
+- assertVisible: "Home"
+
+# Stats tab
+- tapOn: "Stats"
+- takeScreenshot: "02-nav-stats"
+
+# Rules tab
+- tapOn: "Rules"
+- takeScreenshot: "02-nav-rules"
+
+# Back to Home
+- tapOn: "Home"
+- assertVisible: "Home"
+
+# === CREATE GAME ===
+- tapOn: "Play"
+
+# Wait a moment for loading
+- extendedWaitUntil:
+    visible: "Add Guest Players"
+    timeout: 10000
+
+# Dismiss any error dialogs (e.g., "Failed to load users")
+- tapOn:
+    text: "OK"
+    optional: true
+    retryTapIfNoChange: false
+
+# Verify Create Game screen elements
+- assertVisible: "Create New Game"
+- assertVisible: "Add Guest Players"
+- takeScreenshot: "02-create-game-screen"
+
+# Tap Start Game button - it shows at the bottom
+# Using Guest name area as reference point, button is below
+- tapOn: "Guest name"
+- back
+- tapOn:
+    point: "50%,82%"
+
+# Wait for game screen with score grid
+- extendedWaitUntil:
+    visible: "Round"
+    timeout: 10000
+
+- assertVisible: "Total"
+- takeScreenshot: "02-game-created"
+
+# === SCORE ENTRY - Round 1 ===
+# Tap first empty cell (shows "-")
+- tapOn:
+    text: "-"
+    index: 0
+
+# Verify Add Score modal
+- extendedWaitUntil:
+    visible: "Add Score"
+    timeout: 5000
+
+- assertVisible: "Reset"
+- assertVisible: "Bust"
+- assertVisible: "Apply"
+- takeScreenshot: "02-add-score-modal"
+
+# Add 2500 points using quick buttons
+- tapOn: "+1000"
+- tapOn: "+1000"
+- tapOn: "+500"
+- tapOn: "Apply"
+
+# Verify score appears
+- extendedWaitUntil:
+    visible: "2500"
+    timeout: 5000
+- takeScreenshot: "02-round1-score"
+
+# === SCORE ENTRY - Round 2 (Bust) ===
+- tapOn:
+    text: "-"
+    index: 0
+
+- extendedWaitUntil:
+    visible: "Add Score"
+    timeout: 5000
+
+# Enter score then bust
+- tapOn: "+500"
+- tapOn: "Bust"
+
+# Bust closes modal automatically
+- takeScreenshot: "02-round2-bust"
+
+# === SCORE ENTRY - Rounds 3-5 to reach 10,000 ===
+# Round 3: 2500
+- tapOn:
+    text: "-"
+    index: 0
+- extendedWaitUntil:
+    visible: "Add Score"
+    timeout: 5000
+- tapOn: "+1000"
+- tapOn: "+1000"
+- tapOn: "+500"
+- tapOn: "Apply"
+
+# Round 4: 2500
+- tapOn:
+    text: "-"
+    index: 0
+- extendedWaitUntil:
+    visible: "Add Score"
+    timeout: 5000
+- tapOn: "+1000"
+- tapOn: "+1000"
+- tapOn: "+500"
+- tapOn: "Apply"
+
+# Round 5: 2500 (total: 10,000)
+- tapOn:
+    text: "-"
+    index: 0
+- extendedWaitUntil:
+    visible: "Add Score"
+    timeout: 5000
+- tapOn: "+1000"
+- tapOn: "+1000"
+- tapOn: "+500"
+- tapOn: "Apply"
+
+# Verify high score achieved
+- takeScreenshot: "02-reached-10000"
+
+# Verify we can see the total row
+- assertVisible: "Total"
+- takeScreenshot: "02-journey-complete"

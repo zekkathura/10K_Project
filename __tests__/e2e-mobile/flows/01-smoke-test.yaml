@@ -1,0 +1,34 @@
+# Flow: Smoke Test
+# Quick health check - verifies app launches and login works
+# Run time: ~30 seconds
+#
+# Tests:
+# - App launches without crash
+# - Login screen displays correctly
+# - Email/password login succeeds
+# - Home screen with navigation tabs appears
+
+appId: com.tenk.scorekeeper.previewdev
+---
+- launchApp:
+    clearState: true
+
+# Verify login screen loads
+- extendedWaitUntil:
+    visible: "LOG IN"
+    timeout: 10000
+
+- assertVisible: "you@example.com"
+- assertVisible: "Continue with Google"
+- takeScreenshot: "01-login-screen"
+
+# Login
+- runFlow: "../helpers/_login.yaml"
+
+# Verify home screen with all nav tabs
+- assertVisible: "Home"
+- assertVisible: "Game"
+- assertVisible: "Play"
+- assertVisible: "Stats"
+- assertVisible: "Rules"
+- takeScreenshot: "01-home-screen"

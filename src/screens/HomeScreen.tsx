@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Alert, View, StyleSheet, TouchableOpacity, Image, Text, Modal } from 'react-native';
+import { Alert, View, StyleSheet, TouchableOpacity, Image, Text, Modal, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../lib/auth';
 import GamesListScreen from './GamesListScreen';
 import GameScreen from './GameScreen';
@@ -10,6 +11,15 @@ import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
 type NavTab = 'home' | 'game' | 'play' | 'stats' | 'rules';
 const PLAY_COLOR = '#FF7A00';
+
+// Platform-aware alert helper
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}: ${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 
 export default function HomeScreen() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
@@ -23,11 +33,12 @@ export default function HomeScreen() {
   const gameScreenRef = useRef<any>(null);
   const styles = useThemedStyles(createStyles);
   const { mode } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleSignOut = async () => {
     const result = await signOut();
     if (!result.success) {
-      Alert.alert('Error', 'Failed to sign out');
+      showAlert('Error', 'Failed to sign out');
     }
   };
 
@@ -83,7 +94,13 @@ export default function HomeScreen() {
 
   const handleNavigateGame = () => {
     if (!selectedGameId) {
-      Alert.alert('Select a game', 'Pick a game from Home to view it here.');
+      // Navigate to home first, then show the message
+      setShowProfileSettings(false);
+      setShowGameStats(false);
+      setShowRules(false);
+      setIsViewingGame(false);
+      setCurrentTab('home');
+      showAlert('No Game Selected', 'Create a new game or join an existing one to get started.');
       return;
     }
     setShowProfileSettings(false);
@@ -187,7 +204,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { paddingTop: insets.top }]}>
         <View style={styles.topHeaderSpacer} />
         <Image
           source={require('../../assets/images/10k_horizontal_logo.png')}
@@ -245,7 +262,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      <View style={styles.navWrapper}>
+      <View style={[styles.navWrapper, { paddingBottom: insets.bottom }]}>
         <NavButton
           label="Home"
           source={require('../../assets/images/homescreen.png')}
@@ -302,7 +319,8 @@ const createStyles = ({ colors }: Theme) =>
     container: { flex: 1, backgroundColor: colors.background },
     contentWrapper: { flex: 1, paddingBottom: 90 },
     topHeader: {
-      height: 54,
+      minHeight: 54,
+      paddingVertical: 8,
       backgroundColor: colors.surface,
       flexDirection: 'row',
       alignItems: 'center',

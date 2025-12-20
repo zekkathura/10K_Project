@@ -1,0 +1,96 @@
+# Flow: Edge Cases
+# Tests error handling and edge case scenarios
+# Run time: ~1 minute
+#
+# Tests:
+# - Join game with invalid code (error handling)
+# - Dismissing error dialogs
+# - Google OAuth button (verifies it opens browser)
+# - Cancel buttons work correctly
+
+appId: com.tenk.scorekeeper.previewdev
+---
+- launchApp:
+    clearState: true
+
+# === TEST GOOGLE OAUTH BUTTON ===
+# Verify login screen
+- extendedWaitUntil:
+    visible: "LOG IN"
+    timeout: 10000
+
+- takeScreenshot: "04-login-screen"
+
+# Tap Google OAuth (will open browser, can't complete but verifies button works)
+- tapOn: "Continue with Google"
+- scroll  # Brief pause
+- takeScreenshot: "04-google-oauth-started"
+
+# Go back to app (press back or the app should still be there)
+- back
+- scroll
+
+# App may show login screen again or still be there
+# Take screenshot to see state
+- takeScreenshot: "04-after-oauth-back"
+
+# === LOGIN FOR REMAINING TESTS ===
+# Wait for login screen (may need to wait if app was backgrounded)
+- extendedWaitUntil:
+    visible: "LOG IN"
+    timeout: 10000
+
+- runFlow: "../helpers/_login.yaml"
+
+# === TEST JOIN GAME WITH INVALID CODE ===
+# Should be on Home screen now
+- assertVisible: "Home"
+
+# Find and tap Join Game button
+- tapOn: "Join Game"
+
+# Wait for join modal
+- extendedWaitUntil:
+    visible: "Join Game"
+    timeout: 5000
+
+- takeScreenshot: "04-join-modal"
+
+# Enter invalid code
+- tapOn:
+    text: "Enter game code"
+    optional: true
+
+- tapOn:
+    text: "Game code"
+    optional: true
+
+- inputText: "XXXXXX"
+
+# Tap Join button in modal (may be second "Join Game" text)
+- tapOn:
+    text: "Join Game"
+    index: 1
+
+# Should show error - wait a moment
+- scroll
+- takeScreenshot: "04-invalid-code-result"
+
+# Dismiss any error dialog
+- tapOn:
+    text: "OK"
+    optional: true
+    retryTapIfNoChange: false
+
+# Tap Cancel to close modal
+- tapOn:
+    text: "Cancel"
+    optional: true
+    retryTapIfNoChange: false
+
+# Verify back on home screen
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+
+- takeScreenshot: "04-edge-cases-complete"

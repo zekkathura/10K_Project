@@ -6,6 +6,11 @@ node_modules
 .expo-shared
 dist/
 
+# Local builds (APKs/AABs from WSL local builds)
+build/
+*.apk
+*.aab
+
 # Environment variables (NEVER commit these - contain secrets!)
 .env
 .env.local
@@ -39,7 +44,12 @@ playwright-report/
 test-results/
 __tests__/e2e/*.png
 
+# Maestro (mobile E2E testing)
+e2e-mobile/screenshots/
+*.bat
+
 # Local-only files (never commit - contain credentials)
 *.local.md
 *.local.json
 !.claude/settings.local.json
+credentials.json

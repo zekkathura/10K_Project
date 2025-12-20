@@ -1,0 +1,94 @@
+# Flow: Settings and Theme
+# Tests settings modal and theme toggle functionality
+# Run time: ~1 minute
+#
+# Tests:
+# - Opening settings via header icon
+# - Theme dropdown toggle (Light/Dark)
+# - Display name field visibility
+# - Sign out button presence
+# - Closing settings modal
+
+appId: com.tenk.scorekeeper.previewdev
+---
+- launchApp:
+    clearState: true
+
+# Login
+- runFlow: "../helpers/_login.yaml"
+
+# Verify on home screen
+- assertVisible: "Home"
+- takeScreenshot: "03-home-before-settings"
+
+# Open settings via header icon (accessibilityLabel="Settings")
+- tapOn:
+    text: "Settings"
+
+# Wait for settings modal
+- extendedWaitUntil:
+    visible: "Menu"
+    timeout: 5000
+
+# Verify settings screen elements
+- assertVisible: "General"
+- assertVisible: "Theme"
+- assertVisible: "Email"
+- assertVisible: "Display Name"
+- assertVisible: "Sign Out"
+- takeScreenshot: "03-settings-screen"
+
+# Test theme toggle - tap on Theme row
+- tapOn: "Theme"
+
+# Theme dropdown should show Light/Dark options
+- extendedWaitUntil:
+    visible: "Light mode"
+    timeout: 3000
+
+- assertVisible: "Dark mode"
+- takeScreenshot: "03-theme-dropdown"
+
+# Select opposite theme (tap Dark mode if light, or vice versa)
+- tapOn: "Dark mode"
+
+# Wait for theme to apply
+- scroll
+- takeScreenshot: "03-theme-changed"
+
+# Close settings via X button
+- tapOn:
+    text: "×"
+
+# Verify back on home screen
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- takeScreenshot: "03-home-new-theme"
+
+# Reopen settings and restore light theme
+- tapOn:
+    text: "Settings"
+
+- extendedWaitUntil:
+    visible: "Menu"
+    timeout: 5000
+
+- tapOn: "Theme"
+
+- extendedWaitUntil:
+    visible: "Light mode"
+    timeout: 3000
+
+- tapOn: "Light mode"
+- scroll
+
+# Close settings
+- tapOn:
+    text: "×"
+
+# Final verification
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 5000
+- takeScreenshot: "03-settings-complete"

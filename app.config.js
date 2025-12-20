@@ -11,7 +11,8 @@
 
 const IS_DEV = process.env.APP_ENV === 'development';
 const IS_PREVIEW = process.env.APP_ENV === 'preview';
-const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW);
+const IS_PREVIEW_DEV = process.env.APP_ENV === 'preview-dev';
+const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW && !IS_PREVIEW_DEV);
 
 // App version - update this for each release
 const APP_VERSION = '1.0.0';
@@ -20,12 +21,14 @@ const BUILD_NUMBER = 1;
 // Package identifiers
 const getPackageName = () => {
   if (IS_DEV) return 'com.tenk.scorekeeper.dev';
+  if (IS_PREVIEW_DEV) return 'com.tenk.scorekeeper.previewdev';
   if (IS_PREVIEW) return 'com.tenk.scorekeeper.preview';
   return 'com.tenk.scorekeeper';
 };
 
 const getAppName = () => {
   if (IS_DEV) return '10K Scorekeeper (Dev)';
+  if (IS_PREVIEW_DEV) return '10K Scorekeeper (Preview-Dev)';
   if (IS_PREVIEW) return '10K Scorekeeper (Preview)';
   return '10K Scorekeeper';
 };
@@ -37,9 +40,9 @@ export default {
     scheme: 'com.10kscorekeeper',
     version: APP_VERSION,
     orientation: 'portrait',
-    icon: './assets/icon.png',
+    icon: './assets/images/10k_logo.png',
     userInterfaceStyle: 'automatic',
-    newArchEnabled: true,
+    newArchEnabled: false,  // Disabled - was causing immediate crashes on Android
 
     splash: {
       image: './assets/splash-icon.png',
@@ -62,9 +65,9 @@ export default {
       versionCode: BUILD_NUMBER,
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#E53935',
       },
-      edgeToEdgeEnabled: true,
+      // edgeToEdgeEnabled: true,  // Disabled - causes crashes on older Android versions
       permissions: [],
     },
 
@@ -81,7 +84,7 @@ export default {
       // App metadata
       appVersion: APP_VERSION,
       buildNumber: BUILD_NUMBER,
-      environment: IS_DEV ? 'development' : IS_PREVIEW ? 'preview' : 'production',
+      environment: IS_DEV ? 'development' : IS_PREVIEW_DEV ? 'preview-dev' : IS_PREVIEW ? 'preview' : 'production',
 
       // Feature flags
       deepLinkingEnabled: true,

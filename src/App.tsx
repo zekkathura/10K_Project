@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, StyleSheet, Alert, Linking, Modal, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
-import { DiceLoader, ThemedLoader } from './components';
+import { View, StyleSheet, Alert, Linking, Modal, Text, TextInput, TouchableOpacity, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemedLoader } from './components';
 import { Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './lib/supabase';
@@ -10,6 +11,104 @@ import HomeScreen from './screens/HomeScreen';
 import * as WebBrowser from 'expo-web-browser';
 import { ThemeProvider, useTheme, useThemedStyles, Theme } from './lib/theme';
 import { logger } from './lib/logger';
+
+// Error Boundary to catch crashes and display error screen instead of closing
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log error for debugging (won't show in prod due to logger)
+    console.error('App crashed:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={errorStyles.container}>
+          <Text style={errorStyles.title}>Something went wrong</Text>
+          <Text style={errorStyles.message}>
+            The app encountered an error and needs to restart.
+          </Text>
+          <ScrollView style={errorStyles.errorBox}>
+            <Text style={errorStyles.errorText}>
+              {this.state.error?.message || 'Unknown error'}
+            </Text>
+          </ScrollView>
+          <TouchableOpacity
+            style={errorStyles.button}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={errorStyles.buttonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const errorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 16,
+    color: '#aaa',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorBox: {
+    maxHeight: 150,
+    backgroundColor: '#2a2a4e',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    width: '100%',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#ff6b6b',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  button: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 const REMEMBER_ME_KEY = '10k-remember-me';
 
@@ -98,24 +197,39 @@ export default function App() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [creatingProfile, setCreatingProfile] = useState(false);
 
-  // Track if this is a fresh OAuth callback - captured BEFORE Supabase consumes the hash
+  // Track if this is a fresh OAuth callback
+  // On web: check URL hash for access_token (captured BEFORE Supabase consumes it)
+  // On mobile: we'll detect via onAuthStateChange SIGNED_IN event
   const isOAuthCallbackRef = useRef(
     Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
     window.location.hash.includes('access_token')
   );
+  // Track if we've already handled a fresh sign-in in this session (prevents re-processing)
+  const handledFreshSignInRef = useRef(false);
 
   useEffect(() => {
     // Check if profile exists for authenticated user
-    // Returns 'needs_setup' only if we definitively know no profile exists
-    // On error/timeout, assume profile exists and proceed (don't block login)
-    const checkProfile = async (user: User): Promise<ProfileCheckResult> => {
+    // Returns 'needs_setup' only if profile genuinely doesn't exist
+    // Returns 'error' if we can't determine profile status (timeout, RLS, network issues)
+    const checkProfile = async (user: User, retryCount = 0): Promise<ProfileCheckResult> => {
       try {
-        logger.debug('checkProfile called');
+        logger.debug('checkProfile called for user:', user.id, 'retry:', retryCount);
 
-        // Quick timeout - if slow, just proceed (assume profile exists)
+        // On mobile OAuth, the session might not be fully ready immediately
+        // Force a session refresh to ensure auth headers are set correctly
+        if (retryCount === 0 && Platform.OS !== 'web') {
+          logger.debug('Mobile platform - ensuring session is ready');
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (!sessionData?.session) {
+            logger.debug('Session not ready yet, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+
+        // Longer timeout for mobile networks
         const timeoutPromise = new Promise<{ data: null; error: null; timedOut: true }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: null, timedOut: true }), 5000)
+          setTimeout(() => resolve({ data: null, error: null, timedOut: true }), 10000)
         );
 
         // Check if profile exists
@@ -129,15 +243,25 @@ export default function App() {
         const result = await Promise.race([profilePromise, timeoutPromise]);
 
         if (result.timedOut) {
-          logger.debug('Profile check timed out, proceeding anyway');
-          return 'ok'; // Assume profile exists, don't block login
+          logger.error('Profile check timed out');
+          return 'error'; // Can't determine profile status, sign out and retry
         }
 
         logger.debug('Profile check result:', { hasProfile: !!result.data, hasError: !!result.error });
 
         if (result.error) {
-          logger.error('Profile check error', result.error);
-          return 'ok'; // On error, proceed anyway - don't block login
+          logger.error('Profile check error:', result.error);
+
+          // If we get a permission error (42501), the session might not be ready yet
+          // Retry once after a delay (mobile OAuth race condition)
+          if (result.error.code === '42501' && retryCount < 2) {
+            logger.debug('Permission error - session may not be ready, retrying after delay...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return checkProfile(user, retryCount + 1);
+          }
+
+          // On error, return error state to trigger sign out
+          return 'error';
         }
 
         if (!result.data) {
@@ -145,34 +269,78 @@ export default function App() {
           return 'needs_setup';
         }
 
+        logger.debug('Profile exists, proceeding');
         return 'ok';
       } catch (err) {
-        logger.error('Error checking profile', err);
-        return 'ok'; // On error, proceed anyway - don't block login
+        logger.error('Error checking profile:', err);
+        return 'error';
       }
     };
 
+    // Helper to show profile setup modal
+    const showProfileSetup = (session: Session) => {
+      const user = session.user;
+      const suggestedName = user.user_metadata?.full_name ||
+                           user.user_metadata?.name ||
+                           user.email?.split('@')[0] ||
+                           '';
+      setPendingUser(user);
+      setNewDisplayName(suggestedName);
+      setNeedsProfileSetup(true);
+      setSession(session);
+      setLoading(false);
+    };
+
+    // Timeout fallback - if auth doesn't complete in 15 seconds, show login
+    // This prevents the app from being stuck on loading forever
+    const authTimeout = setTimeout(() => {
+      console.log('[APP_DEBUG] Auth timeout - forcing loading=false');
+      setLoading(false);
+    }, 15000);
+
     // Listen for auth changes first
+    console.log('[APP_DEBUG] Setting up auth listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      logger.debug('Auth state changed:', _event);
+      console.log('[APP_DEBUG] Auth state changed:', _event, 'hasSession:', !!session);
+      logger.debug('=== Auth state changed ===');
+      logger.debug('Event:', _event);
+      logger.debug('Has session:', !!session);
+      logger.debug('User ID:', session?.user?.id || 'none');
 
-      // Check profile when user signs in
-      if (_event === 'SIGNED_IN' && session?.user) {
+      // Check profile when user signs in or session is restored
+      // SIGNED_IN: Fresh login (email/password or OAuth)
+      // TOKEN_REFRESHED: Session restored from storage
+      // INITIAL_SESSION: First session check after app load (mobile OAuth uses this)
+      if (session?.user && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION')) {
+        // Mark that we've seen a fresh sign-in (used to skip rememberMe check in getSession)
+        if (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION') {
+          handledFreshSignInRef.current = true;
+        }
+
+        logger.debug('Checking profile for event:', _event);
         const result = await checkProfile(session.user);
+        logger.debug('Profile check result:', result);
 
-        if (result === 'needs_setup') {
-          // Store user and show profile setup modal
-          const suggestedName = session.user.user_metadata?.full_name ||
-                               session.user.user_metadata?.name ||
-                               session.user.email?.split('@')[0] ||
-                               '';
-          setPendingUser(session.user);
-          setNewDisplayName(suggestedName);
-          setNeedsProfileSetup(true);
-          setSession(session); // Keep session but show setup modal
+        if (result === 'error') {
+          logger.error('Profile check failed, signing out');
+          await supabase.auth.signOut();
+          const errorMsg = 'Unable to verify your profile. Please try logging in again.';
+          if (Platform.OS === 'web') {
+            window.alert(errorMsg);
+          } else {
+            Alert.alert('Connection Error', errorMsg);
+          }
+          setSession(null);
           setLoading(false);
           return;
         }
+
+        if (result === 'needs_setup') {
+          logger.debug('Profile needs setup, showing modal');
+          showProfileSetup(session);
+          return;
+        }
+        logger.debug('Profile exists, proceeding to home');
       }
 
       setSession(session);
@@ -180,7 +348,9 @@ export default function App() {
     });
 
     // Get initial session (this will process URL hash on web)
+    console.log('[APP_DEBUG] Calling getSession...');
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      console.log('[APP_DEBUG] getSession returned:', 'hasSession:', !!session, 'error:', error?.message || 'none');
       if (error) {
         logger.error('Error getting session', error);
         setSession(null);
@@ -190,14 +360,18 @@ export default function App() {
       logger.debug('Initial session:', session ? 'authenticated' : 'none');
 
       // Check "remember me" preference - if false, clear any RESTORED session on app load
-      // But don't clear if this is a fresh login (OAuth callback with access_token in URL)
+      // But don't clear if this is a fresh login (OAuth callback)
       if (session?.user) {
-        // Use ref captured at component mount (before Supabase consumed the hash)
-        const isFreshOAuthLogin = isOAuthCallbackRef.current;
+        // Detect fresh OAuth login:
+        // - Web: isOAuthCallbackRef (captured at component mount from URL hash)
+        // - Mobile: handledFreshSignInRef (set by onAuthStateChange SIGNED_IN/INITIAL_SESSION)
+        const isFreshOAuthLogin = isOAuthCallbackRef.current || handledFreshSignInRef.current;
+        logger.debug('getSession: isFreshOAuthLogin =', isFreshOAuthLogin);
 
         if (!isFreshOAuthLogin) {
           try {
             const rememberMeValue = await AsyncStorage.getItem(REMEMBER_ME_KEY);
+            logger.debug('getSession: rememberMe value =', rememberMeValue);
             if (rememberMeValue === 'false') {
               logger.debug('Remember me is disabled, clearing restored session');
               await supabase.auth.signOut();
@@ -210,34 +384,35 @@ export default function App() {
           }
         } else {
           logger.debug('Fresh OAuth login detected, skipping remember me check');
-          // Clear the ref after first use so subsequent page loads don't skip the check
+          // Clear the refs after first use so subsequent app loads don't skip the check
           isOAuthCallbackRef.current = false;
+          handledFreshSignInRef.current = false;
         }
       }
 
-      // Check profile on initial load (in case SIGNED_IN was missed)
+      // Check profile on initial load (in case SIGNED_IN/INITIAL_SESSION was missed)
       if (session?.user) {
+        logger.debug('getSession: Checking profile on initial load');
         const result = await checkProfile(session.user);
+        logger.debug('getSession: Profile check result:', result);
 
         if (result === 'needs_setup') {
-          const suggestedName = session.user.user_metadata?.full_name ||
-                               session.user.user_metadata?.name ||
-                               session.user.email?.split('@')[0] ||
-                               '';
-          setPendingUser(session.user);
-          setNewDisplayName(suggestedName);
-          setNeedsProfileSetup(true);
-          setSession(session);
-          setLoading(false);
+          logger.debug('getSession: Profile needs setup, showing modal');
+          showProfileSetup(session);
           return;
         }
+        logger.debug('getSession: Profile exists, proceeding to home');
       }
 
+      console.log('[APP_DEBUG] Setting loading=false, session:', !!session);
       setSession(session);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(authTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -381,23 +556,127 @@ export default function App() {
     setCreatingProfile(true);
 
     try {
+      // Verify session is still valid before profile operation
+      // On mobile, session retrieval can be flaky - trust pendingUser if session check fails
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        logger.warn('Session check returned null, but pendingUser exists - proceeding with profile creation');
+        // On mobile, don't sign out - the session may just not be immediately available
+        // We already have pendingUser from when auth succeeded, so proceed
+      } else {
+        // Verify the session user matches the pending user (catch OAuth session issues)
+        const currentUserId = sessionData.session.user.id;
+        if (currentUserId !== pendingUser.id) {
+          logger.error('Session user mismatch:', { current: currentUserId, pending: pendingUser.id });
+          const alertMsg = 'Session mismatch. Please sign out and try again.';
+          if (Platform.OS === 'web') {
+            window.alert(alertMsg);
+          } else {
+            Alert.alert('Error', alertMsg);
+          }
+          await handleCancelSetup();
+          return;
+        }
+      }
+
       // Extract full name from OAuth metadata (Google provides this)
       const fullName = pendingUser.user_metadata?.full_name ||
                        pendingUser.user_metadata?.name ||
                        null;
 
-      const { error } = await supabase
+      // Check if profile already exists (could have been created by trigger or previous attempt)
+      let existingProfile: { id: string } | null = null;
+      const { data: profileData, error: checkError } = await supabase
         .from('profiles')
-        .insert({
-          id: pendingUser.id,
-          email: pendingUser.email,
-          display_name: trimmedName,
-          full_name: fullName, // Immutable, for admin reference only
-        });
+        .select('id')
+        .eq('id', pendingUser.id)
+        .maybeSingle();
+
+      existingProfile = profileData;
+
+      // If the check fails with permission error, session might still be settling
+      if (checkError) {
+        logger.error('Error checking existing profile:', checkError);
+        if (checkError.code === '42501') {
+          // Try a short delay and retry once
+          logger.debug('Permission error on profile check, waiting for session to settle...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Re-verify session
+          const { data: retrySession } = await supabase.auth.getSession();
+          if (!retrySession?.session) {
+            const alertMsg = 'Session expired. Please sign in again.';
+            if (Platform.OS === 'web') {
+              window.alert(alertMsg);
+            } else {
+              Alert.alert('Error', alertMsg);
+            }
+            await handleCancelSetup();
+            return;
+          }
+
+          // Retry the profile check
+          logger.debug('Retrying profile check after session settle...');
+          const { data: retryProfile, error: retryError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', pendingUser.id)
+            .maybeSingle();
+
+          if (retryError) {
+            logger.error('Retry profile check failed:', retryError);
+            const alertMsg = `Failed to check profile (${retryError.code}). Please try signing out and back in.`;
+            if (Platform.OS === 'web') {
+              window.alert(alertMsg);
+            } else {
+              Alert.alert('Error', alertMsg);
+            }
+            return;
+          }
+          existingProfile = retryProfile;
+        }
+      }
+
+      let error;
+      if (existingProfile) {
+        // Profile exists - update it
+        const result = await supabase
+          .from('profiles')
+          .update({
+            display_name: trimmedName,
+            email: pendingUser.email,
+          })
+          .eq('id', pendingUser.id);
+        error = result.error;
+      } else {
+        // Profile doesn't exist - insert it
+        const result = await supabase
+          .from('profiles')
+          .insert({
+            id: pendingUser.id,
+            email: pendingUser.email,
+            display_name: trimmedName,
+            full_name: fullName, // Immutable, for admin reference only
+          });
+        error = result.error;
+      }
 
       if (error) {
         logger.error('Failed to create profile', error);
-        const alertMsg = 'Failed to create profile. Please try again.';
+        // Always show error code for debugging (doesn't expose sensitive info)
+        const errorCode = error.code || 'unknown';
+        const errorHint = error.hint || error.message || '';
+        let alertMsg = `Failed to create profile (${errorCode}).`;
+
+        // Add helpful hints for common errors
+        if (errorCode === '42501') {
+          alertMsg += ' Permission denied - please try signing out and back in.';
+        } else if (errorCode === '23505') {
+          alertMsg += ' Profile may already exist.';
+        } else if (errorHint) {
+          alertMsg += ` ${errorHint}`;
+        }
+
         if (Platform.OS === 'web') {
           window.alert(alertMsg);
         } else {
@@ -433,41 +712,36 @@ export default function App() {
     setSession(null);
   };
 
+  // Use simple ActivityIndicator for initial load - this runs before ErrorBoundary
+  // so we need the most stable, basic component possible to prevent crashes
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        {Platform.OS === 'web' ? (
-          <>
-            <DiceLoader size={70} />
-            <Text style={styles.loadingText}>Loading...</Text>
-          </>
-        ) : (
-          <>
-            <View style={{ width: 70, height: 70, justifyContent: 'center', alignItems: 'center' }}>
-              <ThemedLoader mode="inline" size="large" color="#DC2626" />
-            </View>
-            <Text style={styles.loadingText}>Loading...</Text>
-          </>
-        )}
+        <ActivityIndicator size="large" color="#DC2626" />
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <ThemeProvider>
-      {session ? <HomeScreen /> : <LoginScreen />}
-      <StatusBar style="auto" />
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          {session ? <HomeScreen /> : <LoginScreen />}
+          <StatusBar style="auto" />
 
-      {/* Profile Setup Modal */}
-      <ProfileSetupModal
-        visible={needsProfileSetup}
-        displayName={newDisplayName}
-        onChangeDisplayName={setNewDisplayName}
-        onConfirm={handleCreateProfile}
-        onCancel={handleCancelSetup}
-        loading={creatingProfile}
-      />
-    </ThemeProvider>
+          {/* Profile Setup Modal */}
+          <ProfileSetupModal
+            visible={needsProfileSetup}
+            displayName={newDisplayName}
+            onChangeDisplayName={setNewDisplayName}
+            onConfirm={handleCreateProfile}
+            onCancel={handleCancelSetup}
+            loading={creatingProfile}
+          />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

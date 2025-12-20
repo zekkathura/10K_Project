@@ -1,0 +1,34 @@
+# Maestro Configuration
+# https://maestro.mobile.dev/reference/configuration
+
+# Default app ID - Preview-Dev for E2E testing against 10k-dev Supabase
+appId: com.tenk.scorekeeper.previewdev
+
+# App IDs by environment:
+# - Development: com.tenk.scorekeeper.dev (requires dev server)
+# - Preview-Dev: com.tenk.scorekeeper.previewdev (standalone APK, 10k-dev Supabase)
+# - Preview: com.tenk.scorekeeper.preview (standalone APK, 10k-prod Supabase)
+# - Production: com.tenk.scorekeeper
+
+# Test flows - only include flows/ directory (helpers/ excluded)
+flows:
+  - flows/
+
+# Screenshot settings
+screenshots:
+  enabled: true
+
+# Test users (created in 10k-dev Supabase Authentication):
+# - testuser1@10k.test / TestPassword123!
+# - testuser2@10k.test / TestPassword123!
+#
+# IMPORTANT: These users must have profiles in the profiles table.
+# Run 01-smoke-test first after creating users to verify login works.
+
+# Optimized test strategy (4 flows instead of 19):
+# 01-smoke-test.yaml        - Quick health check (~30s)
+# 02-full-user-journey.yaml - Complete game lifecycle (~3-4min)
+# 03-settings-and-theme.yaml - Settings and theme toggle (~1min)
+# 04-edge-cases.yaml        - Error handling tests (~1min)
+#
+# Total run time: ~6 minutes (vs 10+ minutes with old tests)
