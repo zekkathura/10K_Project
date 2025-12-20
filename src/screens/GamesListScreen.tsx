@@ -32,12 +32,17 @@ const LOADING_MESSAGES = [
 ];
 
 interface GamesListScreenProps {
-  onGameSelect: (gameId: string, navigate?: boolean) => void;
+  onGameSelect: (gameId: string, navigate?: boolean, status?: 'active' | 'ended') => void;
   onOpenProfile: () => void;
   selectedGameId: string | null;
   createGameTrigger?: number;
   reloadTrigger?: number;
 }
+
+// Cache games data at module level to persist across navigations
+let cachedGames: Game[] | null = null;
+let cachedUserId: string | null = null;
+let cachedUserDisplayName: string | null = null;
 
 export default function GamesListScreen({
   onGameSelect,
@@ -46,11 +51,12 @@ export default function GamesListScreen({
   createGameTrigger = 0,
   reloadTrigger = 0,
 }: GamesListScreenProps) {
-  const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache - show cached data immediately
+  const [games, setGames] = useState<Game[]>(cachedGames || []);
+  const [loading, setLoading] = useState(cachedGames === null); // Only show loading if no cache
   const [showCreateScreen, setShowCreateScreen] = useState(false);
-  const [userId, setUserId] = useState<string>('');
-  const [userDisplayName, setUserDisplayName] = useState<string>('');
+  const [userId, setUserId] = useState<string>(cachedUserId || '');
+  const [userDisplayName, setUserDisplayName] = useState<string>(cachedUserDisplayName || '');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(() => Math.floor(Math.random() * LOADING_MESSAGES.length));
@@ -111,7 +117,7 @@ export default function GamesListScreen({
 
   const loadGames = async () => {
     const loadStartTime = Date.now();
-    const MIN_LOADING_TIME = 1000; // One full wobble cycle
+    const MIN_LOADING_TIME = 0; // Removed delay for faster navigation
 
     try {
       // Use getSession instead of getUser - getUser makes a network call that can hang
@@ -120,6 +126,7 @@ export default function GamesListScreen({
       if (!user) return;
 
       setUserId(user.id);
+      cachedUserId = user.id;
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -127,7 +134,9 @@ export default function GamesListScreen({
         .eq('id', user.id)
         .single();
 
-      setUserDisplayName(profile?.display_name || user.email || 'Player');
+      const displayName = profile?.display_name || user.email || 'Player';
+      setUserDisplayName(displayName);
+      cachedUserDisplayName = displayName;
 
       const myGames = await getMyGames(user.id);
       const scopedGames = myGames.filter((g: any) =>
@@ -162,12 +171,13 @@ export default function GamesListScreen({
       );
 
       setGames(gamesWithPlayerCount);
+      cachedGames = gamesWithPlayerCount; // Update cache
 
       // Auto-select the first active game if none is selected
       if (!selectedGameId) {
         const firstActive = gamesWithPlayerCount.find((game) => game.status === 'active');
         if (firstActive) {
-          onGameSelect(firstActive.id, false);
+          onGameSelect(firstActive.id, false, 'active');
         }
       }
     } catch (error) {
@@ -186,7 +196,7 @@ export default function GamesListScreen({
   const handleGameCreated = (gameId: string) => {
     setShowCreateScreen(false);
     loadGames();
-    onGameSelect(gameId);
+    onGameSelect(gameId, true, 'active');
   };
 
   const handleJoinByCode = async () => {
@@ -205,7 +215,7 @@ export default function GamesListScreen({
       setShowJoinModal(false);
       setJoinCode('');
       loadGames();
-      onGameSelect(gameId);
+      onGameSelect(gameId, true, 'active');
     } catch (error: any) {
       Alert.alert('Error', 'Failed to join game. Please check the code and try again.');
     }
@@ -267,7 +277,7 @@ export default function GamesListScreen({
                 isSelected && styles.selectedCard,
                 isCompleted && styles.completedCard,
               ]}
-              onPress={() => onGameSelect(item.id)}
+              onPress={() => onGameSelect(item.id, true, section.type === 'completed' ? 'ended' : 'active')}
               accessibilityLabel={`${isCompleted ? 'Completed game' : 'Game'} ${item.join_code || 'unknown'}${isSelected ? ', selected' : ''}${winnerName ? `, winner ${winnerName}` : ''}`}
               accessibilityRole="button"
               accessibilityHint={isCompleted ? 'Tap to view this completed game' : 'Tap to open this game'}

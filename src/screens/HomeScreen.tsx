@@ -7,7 +7,6 @@ import GameScreen from './GameScreen';
 import SettingsScreen from './SettingsScreen';
 import GameStatsScreen from './GameStatsScreen';
 import RulesScreen from './RulesScreen';
-import { ThemedLoader } from '../components';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
 type NavTab = 'home' | 'game' | 'play' | 'stats' | 'rules';
@@ -23,11 +22,13 @@ const showAlert = (title: string, message: string) => {
 };
 
 export default function HomeScreen() {
+  // selectedGameId: Always an active game - the one highlighted in the list and accessible via Game tab
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  // viewingGameId: The game currently displayed on GameScreen (can be active or completed)
+  const [viewingGameId, setViewingGameId] = useState<string | null>(null);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showGameStats, setShowGameStats] = useState(false);
   const [showRules, setShowRules] = useState(false);
-  const [isViewingGame, setIsViewingGame] = useState(false);
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [playTrigger, setPlayTrigger] = useState(0);
   const [reloadGamesTrigger, setReloadGamesTrigger] = useState(0);
@@ -37,6 +38,9 @@ export default function HomeScreen() {
   const { mode } = useTheme();
   const insets = useSafeAreaInsets();
 
+  // Derived state: are we viewing a game?
+  const isViewingGame = viewingGameId !== null;
+
   const handleSignOut = async () => {
     const result = await signOut();
     if (!result.success) {
@@ -44,29 +48,34 @@ export default function HomeScreen() {
     }
   };
 
-  const handleGameSelect = (gameId: string, navigate: boolean = true) => {
-    setSelectedGameId(gameId);
+  const handleGameSelect = (gameId: string, navigate: boolean = true, status: 'active' | 'ended' = 'active') => {
+    // Only update selectedGameId for active games - it always represents the "current" active game
+    if (status === 'active') {
+      setSelectedGameId(gameId);
+    }
+    // viewingGameId tracks what's currently displayed on GameScreen (active or completed)
     if (navigate) {
-      setIsViewingGame(true);
+      setViewingGameId(gameId);
       setCurrentTab('game');
     }
   };
 
   const handleBackToList = () => {
-    setIsViewingGame(false);
+    // Just clear the viewing state - selectedGameId remains unchanged
+    setViewingGameId(null);
     setCurrentTab('home');
   };
 
   const handleGameRemoved = () => {
     setSelectedGameId(null);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('home');
     setReloadGamesTrigger((n) => n + 1);
   };
 
   const handleOpenProfile = () => {
     setShowProfileSettings(true);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('home');
   };
 
@@ -77,7 +86,7 @@ export default function HomeScreen() {
 
   const handleCloseStats = () => {
     setShowGameStats(false);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('home');
   };
 
@@ -90,24 +99,26 @@ export default function HomeScreen() {
     setShowProfileSettings(false);
     setShowGameStats(false);
     setShowRules(false);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('home');
   };
 
   const handleNavigateGame = () => {
+    // Game tab always goes to the selected active game
     if (!selectedGameId) {
-      // No game selected - show themed alert modal
+      // No active game selected - show themed alert modal
       setShowProfileSettings(false);
       setShowGameStats(false);
       setShowRules(false);
-      setIsViewingGame(false);
+      setViewingGameId(null);
       setCurrentTab('home');
       setShowNoGameAlert(true);
       return;
     }
     setShowProfileSettings(false);
     setShowGameStats(false);
-    setIsViewingGame(true);
+    setShowRules(false);
+    setViewingGameId(selectedGameId);
     setCurrentTab('game');
   };
 
@@ -115,7 +126,7 @@ export default function HomeScreen() {
     setShowProfileSettings(false);
     setShowRules(false);
     setShowGameStats(true);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('stats');
   };
 
@@ -123,14 +134,14 @@ export default function HomeScreen() {
     setShowGameStats(false);
     setShowRules(true);
     setShowProfileSettings(false);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('rules');
   };
 
   const handleNavigatePlay = () => {
     setShowProfileSettings(false);
     setShowGameStats(false);
-    setIsViewingGame(false);
+    setViewingGameId(null);
     setCurrentTab('play');
     setPlayTrigger((n) => n + 1);
   };
@@ -246,10 +257,10 @@ export default function HomeScreen() {
           />
         ) : showRules ? (
           <RulesScreen />
-        ) : isViewingGame && selectedGameId ? (
+        ) : viewingGameId ? (
           <GameScreen
             ref={gameScreenRef}
-            gameId={selectedGameId}
+            gameId={viewingGameId}
             onBack={handleBackToList}
             onGameRemoved={handleGameRemoved}
           />

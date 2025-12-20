@@ -12,6 +12,7 @@ import {
   Platform,
   Animated,
   Easing,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedLoader } from '../components';
@@ -22,11 +23,34 @@ import { signInWithGoogle } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { AUTH_STORAGE_KEYS, APP_SCHEME } from '../lib/authConfig';
+import { LoadingStatus } from '../App';
 
 // Dice faces for decoration
 const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  /** Whether the app is still initializing (checking session) */
+  initializing?: boolean;
+  /** Current loading status for display */
+  loadingStatus?: LoadingStatus;
+}
+
+// Get user-friendly loading message
+function getLoadingMessage(status: LoadingStatus): string {
+  switch (status) {
+    case 'initializing':
+    case 'checking_session':
+      return 'Checking for existing session...';
+    case 'verifying_account':
+      return 'Verifying account...';
+    case 'loading_profile':
+      return 'Loading profile...';
+    default:
+      return 'Loading...';
+  }
+}
+
+export default function LoginScreen({ initializing = false, loadingStatus = null }: LoginScreenProps) {
   const insets = useSafeAreaInsets();
 
   // Logo wiggle animation
@@ -271,10 +295,20 @@ export default function LoginScreen() {
     );
   }
 
+  // Buttons should be disabled while initializing or during auth operations
+  const buttonsDisabled = initializing || loading;
+
   return (
     <View style={styles.flex}>
       {/* FIXED HEADER - accent bar, logo, tabs */}
       <View style={[styles.fixedHeader, { paddingTop: insets.top }]}>
+        {/* Loading banner - shows while initializing */}
+        {initializing && loadingStatus && (
+          <View style={styles.initBanner}>
+            <ActivityIndicator size="small" color="#fff" style={styles.initSpinner} />
+            <Text style={styles.initText}>{getLoadingMessage(loadingStatus)}</Text>
+          </View>
+        )}
         <View style={styles.accentBar} />
 
         <View style={styles.headerContent}>
@@ -471,12 +505,12 @@ export default function LoginScreen() {
               )}
 
               <TouchableOpacity
-                style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+                style={[styles.primaryButton, buttonsDisabled && styles.primaryButtonDisabled]}
                 onPress={onSubmit}
-                disabled={loading}
+                disabled={buttonsDisabled}
                 accessibilityLabel={mode === 'signin' ? 'Log in' : 'Sign up'}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: loading }}
+                accessibilityState={{ disabled: buttonsDisabled }}
               >
                 {loading && loadingMessage && !loadingMessage.includes('Google') ? (
                   <View style={styles.loadingRow}>
@@ -500,12 +534,12 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={styles.googleButton}
+              style={[styles.googleButton, buttonsDisabled && styles.googleButtonDisabled]}
               onPress={handleGoogleSignIn}
-              disabled={loading}
+              disabled={buttonsDisabled}
               accessibilityLabel="Continue with Google"
               accessibilityRole="button"
-              accessibilityState={{ disabled: loading }}
+              accessibilityState={{ disabled: buttonsDisabled }}
             >
               <Image
                 source={require('../../assets/images/google_logo.png')}
@@ -548,6 +582,22 @@ const createStyles = ({ colors, mode }: Theme) =>
       backgroundColor: colors.background,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
+    },
+    initBanner: {
+      backgroundColor: colors.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+    },
+    initSpinner: {
+      marginRight: 8,
+    },
+    initText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '500',
     },
     headerContent: {
       paddingHorizontal: 32,
@@ -792,6 +842,9 @@ const createStyles = ({ colors, mode }: Theme) =>
       justifyContent: 'center',
       borderWidth: 2,
       borderColor: colors.border,
+    },
+    googleButtonDisabled: {
+      opacity: 0.5,
     },
     googleButtonText: {
       color: colors.textPrimary,

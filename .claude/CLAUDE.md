@@ -75,9 +75,10 @@ When debugging auth/permission issues or after policy changes:
 
 ### Use Skills First (`.claude/skills/`)
 **Before writing code, check these Skills for patterns:**
+- `expo-dev-server` – **CRITICAL:** Always kill old processes before starting Expo, environment switching
 - `react-native-web-patterns` – Platform.OS checks, alerts, web compatibility
 - `supabase-patterns` – DB queries, realtime, GRANT permissions, RLS, error handling
-- `theme-styling` – Theme usage, modal structure, button patterns
+- `theme-styling` – Theme usage, modal structure, button patterns, themed alert modals
 - `validation-errors` – Input validation, error display
 - `modal-components` – Standard modal layouts
 - `testing-patterns` – Unit tests, E2E tests, mocking, test utilities
@@ -91,7 +92,8 @@ When debugging auth/permission issues or after policy changes:
 - **Validation**: Use `src/lib/validation.ts` functions before any DB operation
 - **Database Ops**: Use functions from `src/lib/database.ts` (don't write raw Supabase queries)
 - **Themes**: Use `useTheme()` and `useThemedStyles()` – never hardcode colors
-- **Loading States**: Use `<ThemedLoader />` from `src/components` (red dice on web, spinner on native)
+- **Loading States**: Use `<ThemedLoader />` from `src/components` with cycling messages and 1-second minimum display time
+- **Themed Alerts**: Use custom Modal with theme colors instead of native `Alert.alert` for consistent dark/light mode
 - **Safe Areas**: Use `useSafeAreaInsets()` for screens to avoid status bar/home indicator overlap
 
 ## Recent Critical Fixes
@@ -104,6 +106,10 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Profile creation: Removed duplicate logic from LoginScreen - App.tsx's ProfileSetupModal handles all OAuth profile creation
 - ✅ HomeScreen header: Changed from fixed `height` to `minHeight` to accommodate safe area insets on phones with notches
 - ✅ Auth refactoring: Centralized auth constants, added timeout utilities, removed session polling workaround from LoginScreen
+- ✅ Dice animation: NativeDiceLoader uses "Wide Wobble" (±18° rotation, 2 oscillations, decay)
+- ✅ Loading UX: Cycling humorous messages on Stats/Games screens, 1-second minimum display
+- ✅ Themed alerts: "No Game Selected" uses custom Modal respecting dark/light theme
+- ✅ Env cleanup: Simplified to `.env` + `.env.alternatives` + `.env.test`
 
 ## Environments
 
@@ -115,9 +121,11 @@ When debugging auth/permission issues or after policy changes:
 | **Development** | `10k-dev` | Testing, development |
 
 **Environment Files:**
-- `.env` – Production credentials (app uses this by default)
-- `.env.test` – Development/test credentials (tests use this)
-- `.env.example` – Template showing all required variables
+- `.env` – Active credentials (app reads this file)
+- `.env.alternatives` – Reference file with PROD and DEV credentials to copy from
+- `.env.test` – Jest tests only (uses `TEST_` prefix variables)
+
+**To switch environments:** Copy desired section from `.env.alternatives` into `.env`, restart Expo with `--clear`
 
 **Build Configuration:**
 - `app.config.js` – Dynamic Expo config (version, package names per environment)

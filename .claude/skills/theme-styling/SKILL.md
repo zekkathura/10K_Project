@@ -141,6 +141,87 @@ closeX: {
 }
 ```
 
+### Themed Alert Modal (Instead of Native Alert)
+
+**DO NOT use `Alert.alert()` for themed consistency.** Use a custom Modal:
+
+```typescript
+// State
+const [showAlert, setShowAlert] = useState(false);
+
+// Component
+<Modal
+  visible={showAlert}
+  transparent={true}
+  animationType="fade"
+  onRequestClose={() => setShowAlert(false)}
+>
+  <View style={styles.alertOverlay}>
+    <View style={styles.alertContainer}>
+      <Text style={styles.alertTitle}>Alert Title</Text>
+      <Text style={styles.alertMessage}>
+        Alert message text here.
+      </Text>
+      <TouchableOpacity
+        style={styles.alertButton}
+        onPress={() => setShowAlert(false)}
+      >
+        <Text style={styles.alertButtonText}>Got it</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+// Styles (in createStyles):
+alertOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+},
+alertContainer: {
+  backgroundColor: colors.surface,
+  borderRadius: 16,
+  padding: 24,
+  width: '100%',
+  maxWidth: 320,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+alertTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: colors.textPrimary,
+  marginBottom: 12,
+  textAlign: 'center',
+},
+alertMessage: {
+  fontSize: 15,
+  color: colors.textSecondary,
+  textAlign: 'left',
+  marginBottom: 20,
+  lineHeight: 22,
+  alignSelf: 'stretch',
+},
+alertButton: {
+  backgroundColor: colors.buttonPrimary,
+  paddingVertical: 12,
+  paddingHorizontal: 32,
+  borderRadius: 8,
+  minWidth: 120,
+},
+alertButtonText: {
+  color: colors.buttonText,
+  fontSize: 16,
+  fontWeight: '600',
+  textAlign: 'center',
+},
+```
+
+**Example:** See `HomeScreen.tsx` "No Game Selected" alert for implementation.
+
 ### Button Patterns
 
 ```typescript

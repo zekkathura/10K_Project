@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, Component, ErrorInfo, ReactNode } f
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet, Alert, Linking, Modal, Text, TextInput, TouchableOpacity, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemedLoader } from './components';
+import { ThemedLoader, ThemedAlertProvider } from './components';
 import { Session, User } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './lib/supabase';
@@ -184,9 +184,19 @@ function ProfileSetupModal({
   );
 }
 
+// Loading status for progress display - exported for LoginScreen
+export type LoadingStatus =
+  | 'initializing'      // App starting up
+  | 'checking_session'  // Checking for existing session
+  | 'authenticating'    // OAuth in progress
+  | 'verifying_account' // Checking if profile exists
+  | 'loading_profile'   // Profile found, loading data
+  | null;               // Not loading
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(false); // Start false - show login immediately, check auth in background
+  const [loading, setLoading] = useState(true); // Start true - show loading while checking session
+  const [loadingStatus, setLoadingStatus] = useState<LoadingStatus>('initializing');
   const [pendingGameCode, setPendingGameCode] = useState<string | null>(null);
 
   // Profile setup state
@@ -205,189 +215,205 @@ export default function App() {
   );
   // Track if we've already handled a fresh sign-in in this session (prevents re-processing)
   const handledFreshSignInRef = useRef(false);
-  // Track if onAuthStateChange is currently processing (prevents race with getSession)
-  const processingAuthChangeRef = useRef(false);
+  // Track if profile check has been completed for current session
+  const profileCheckedRef = useRef(false);
 
-  useEffect(() => {
-    // Check if profile exists for authenticated user
-    // Returns 'needs_setup' only if profile genuinely doesn't exist
-    // Returns 'error' if we can't determine profile status (timeout, RLS, network issues)
-    const checkProfile = async (user: User, retryCount = 0): Promise<ProfileCheckResult> => {
-      try {
-        logger.debug('checkProfile called for user:', user.id, 'retry:', retryCount);
+  // Helper to show profile setup modal
+  const showProfileSetup = (user: User) => {
+    const suggestedName = user.user_metadata?.full_name ||
+                         user.user_metadata?.name ||
+                         user.email?.split('@')[0] ||
+                         '';
+    setPendingUser(user);
+    setNewDisplayName(suggestedName);
+    setNeedsProfileSetup(true);
+    setLoadingStatus(null);
+    setLoading(false);
+  };
 
-        // Check if profile exists (with timeout)
-        const profilePromise = (async () => {
-          const result = await supabase
-            .from('profiles')
-            .select('id, email')
-            .eq('id', user.id)
-            .maybeSingle();
-          return result as { data: { id: string; email: string } | null; error: any };
-        })();
+  // Check if profile exists for authenticated user
+  const checkProfile = async (user: User, retryCount = 0): Promise<ProfileCheckResult> => {
+    try {
+      logger.debug('checkProfile called for user:', user.id, 'retry:', retryCount);
+      setLoadingStatus('verifying_account');
 
-        const result = await raceWithTimeout(profilePromise, AUTH_TIMEOUTS.PROFILE_CHECK);
+      // On mobile, wait for session to settle before querying
+      // This prevents RLS queries from hanging when session isn't fully established
+      if (Platform.OS !== 'web' && retryCount === 0) {
+        logger.debug('Mobile platform - waiting for session to settle:', AUTH_TIMEOUTS.MOBILE_SESSION_SETTLE, 'ms');
+        await sleep(AUTH_TIMEOUTS.MOBILE_SESSION_SETTLE);
+      }
 
-        if (result.timedOut) {
-          logger.warn('Profile check timed out - assuming new user, will show setup');
-          // Don't sign out on timeout - show profile setup instead
-          // The modal handles both new and existing profiles
-          return 'needs_setup';
+      // Check if profile exists (with timeout)
+      const profilePromise = supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const result = await raceWithTimeout(profilePromise, AUTH_TIMEOUTS.PROFILE_CHECK);
+
+      if (result.timedOut) {
+        // On timeout, retry with longer delays
+        if (retryCount < 2) {
+          logger.warn('Profile check timed out, retrying... (attempt', retryCount + 2, ')');
+          await sleep(AUTH_TIMEOUTS.RETRY_DELAY * (retryCount + 1));
+          return checkProfile(user, retryCount + 1);
         }
+        logger.error('Profile check timed out after all retries');
+        return 'error';
+      }
 
-        const { data, error } = result.data;
-        logger.debug('Profile check result:', { hasProfile: !!data, hasError: !!error });
+      const { data, error } = result.data as { data: { id: string; email: string } | null; error: any };
+      logger.debug('Profile check result:', { hasProfile: !!data, hasError: !!error });
 
-        if (error) {
-          logger.error('Profile check error:', error);
-
-          // If we get a permission error, the session might not be ready yet
-          // Retry once after a delay (mobile OAuth race condition)
-          if (error.code === AUTH_ERROR_CODES.PERMISSION_DENIED && retryCount < 2) {
-            logger.debug('Permission error - session may not be ready, retrying after delay...');
-            await sleep(AUTH_TIMEOUTS.RETRY_DELAY);
-            return checkProfile(user, retryCount + 1);
-          }
-
-          // On error, show profile setup instead of signing out
-          // This is more user-friendly - let them try to create/update profile
-          logger.warn('Profile check failed - showing setup modal as fallback');
-          return 'needs_setup';
+      if (error) {
+        logger.error('Profile check error:', error);
+        if (error.code === AUTH_ERROR_CODES.PERMISSION_DENIED && retryCount < 2) {
+          logger.debug('Permission error - retrying after delay...');
+          await sleep(AUTH_TIMEOUTS.RETRY_DELAY);
+          return checkProfile(user, retryCount + 1);
         }
+        return 'needs_setup'; // Be lenient - let user try to create profile
+      }
 
-        if (!data) {
-          logger.debug('No profile found, needs setup');
-          return 'needs_setup';
-        }
-
-        logger.debug('Profile exists, proceeding');
-        return 'ok';
-      } catch (err) {
-        logger.error('Error checking profile:', err);
-        // Be lenient - show profile setup instead of failing
+      if (!data) {
+        logger.debug('No profile found, needs setup');
         return 'needs_setup';
       }
-    };
 
-    // Helper to show profile setup modal
-    const showProfileSetup = (session: Session) => {
-      const user = session.user;
-      const suggestedName = user.user_metadata?.full_name ||
-                           user.user_metadata?.name ||
-                           user.email?.split('@')[0] ||
-                           '';
-      setPendingUser(user);
-      setNewDisplayName(suggestedName);
-      setNeedsProfileSetup(true);
-      setSession(session);
-      setLoading(false);
-    };
+      logger.debug('Profile exists, proceeding');
+      setLoadingStatus('loading_profile');
+      return 'ok';
+    } catch (err) {
+      logger.error('Error checking profile:', err);
+      return 'needs_setup';
+    }
+  };
 
-    // Listen for auth changes first
+  // Effect 1: Set up auth listener and get initial session
+  // This effect ONLY updates session state - no profile checks
+  useEffect(() => {
     logger.debug('Setting up auth listener...');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      logger.debug('Auth state changed:', _event, 'hasSession:', !!session);
-      logger.debug('Event:', _event);
-      logger.debug('Has session:', !!session);
-      logger.debug('User ID:', session?.user?.id || 'none');
+    setLoadingStatus('checking_session');
 
-      // Check profile when user signs in or session is restored
-      // SIGNED_IN: Fresh login (email/password or OAuth)
-      // TOKEN_REFRESHED: Session restored from storage
-      // INITIAL_SESSION: First session check after app load (mobile OAuth uses this)
-      if (session?.user && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION')) {
-        // Mark that we've seen a fresh sign-in (used to skip rememberMe check in getSession)
-        if (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION') {
-          handledFreshSignInRef.current = true;
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      logger.debug('Auth state changed:', _event, 'hasSession:', !!newSession);
 
-        // Set session immediately so user sees HomeScreen (not stuck on LoginScreen)
-        // Profile check happens in background
-        setSession(session);
-        setLoading(false);
-
-        logger.debug('Checking profile for event:', _event);
-        const result = await checkProfile(session.user);
-        logger.debug('Profile check result:', result);
-
-        if (result === 'needs_setup') {
-          logger.debug('Profile needs setup, showing modal');
-          showProfileSetup(session);
-        }
-        // result === 'ok' - profile exists, already on home
-        return;
+      // Track fresh sign-in for remember-me logic
+      if (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION') {
+        handledFreshSignInRef.current = true;
       }
 
-      setSession(session);
-      setLoading(false);
+      // Reset profile checked flag when session changes
+      if (newSession?.user?.id !== session?.user?.id) {
+        profileCheckedRef.current = false;
+      }
+
+      // Just update session state - profile check happens in separate effect
+      setSession(newSession);
     });
 
-    // Get initial session (this will process URL hash on web)
+    // Get initial session
     logger.debug('Calling getSession...');
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      logger.debug('getSession returned:', 'hasSession:', !!session, 'error:', error?.message || 'none');
+    supabase.auth.getSession().then(async ({ data: { session: initialSession }, error }) => {
+      logger.debug('getSession returned:', 'hasSession:', !!initialSession, 'error:', error?.message || 'none');
+
       if (error) {
         logger.error('Error getting session', error);
         setSession(null);
         setLoading(false);
+        setLoadingStatus(null);
         return;
       }
-      logger.debug('Initial session:', session ? 'authenticated' : 'none');
 
-      // Check "remember me" preference - if false, clear any RESTORED session on app load
-      // But don't clear if this is a fresh login (OAuth callback)
-      if (session?.user) {
-        // Detect fresh OAuth login:
-        // - Web: isOAuthCallbackRef (captured at component mount from URL hash)
-        // - Mobile: handledFreshSignInRef (set by onAuthStateChange SIGNED_IN/INITIAL_SESSION)
+      // Check "remember me" preference
+      if (initialSession?.user) {
         const isFreshOAuthLogin = isOAuthCallbackRef.current || handledFreshSignInRef.current;
-        logger.debug('getSession: isFreshOAuthLogin =', isFreshOAuthLogin);
 
         if (!isFreshOAuthLogin) {
           try {
             const rememberMeValue = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.REMEMBER_ME);
-            logger.debug('getSession: rememberMe value =', rememberMeValue);
             if (rememberMeValue === 'false') {
               logger.debug('Remember me is disabled, clearing restored session');
               await supabase.auth.signOut();
               setSession(null);
               setLoading(false);
+              setLoadingStatus(null);
               return;
             }
           } catch (err) {
             logger.error('Error checking remember me preference', err);
           }
         } else {
-          logger.debug('Fresh OAuth login detected, skipping remember me check');
-          // Clear the refs after first use so subsequent app loads don't skip the check
           isOAuthCallbackRef.current = false;
           handledFreshSignInRef.current = false;
         }
       }
 
-      // Check profile on initial load (in case SIGNED_IN/INITIAL_SESSION was missed)
-      if (session?.user) {
-        logger.debug('getSession: Checking profile on initial load');
-        const result = await checkProfile(session.user);
-        logger.debug('getSession: Profile check result:', result);
+      // Set session - profile check will happen in the next effect
+      setSession(initialSession);
 
-        if (result === 'needs_setup') {
-          logger.debug('getSession: Profile needs setup, showing modal');
-          showProfileSetup(session);
-          return;
-        }
-        logger.debug('getSession: Profile exists, proceeding to home');
+      // If no session, we're done loading
+      if (!initialSession) {
+        setLoading(false);
+        setLoadingStatus(null);
       }
-
-      logger.debug('Setting loading=false, session:', !!session);
-      setSession(session);
-      setLoading(false);
     });
 
     return () => {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Effect 2: Check profile when session is established
+  // This runs AFTER session state is updated, ensuring proper sequencing
+  useEffect(() => {
+    const runProfileCheck = async () => {
+      // Skip if no session or already checked
+      if (!session?.user) {
+        return;
+      }
+
+      if (profileCheckedRef.current) {
+        logger.debug('Profile already checked for this session');
+        setLoading(false);
+        setLoadingStatus(null);
+        return;
+      }
+
+      // Mark as checked to prevent duplicate checks
+      profileCheckedRef.current = true;
+
+      logger.debug('Running profile check for session user');
+      const result = await checkProfile(session.user);
+      logger.debug('Profile check complete:', result);
+
+      if (result === 'error') {
+        logger.error('Profile check failed, signing out');
+        const alertMsg = 'Unable to verify your account. Please try signing in again.';
+        if (Platform.OS === 'web') {
+          window.alert(alertMsg);
+        } else {
+          Alert.alert('Connection Error', alertMsg);
+        }
+        await supabase.auth.signOut();
+        setSession(null);
+        profileCheckedRef.current = false;
+      } else if (result === 'needs_setup') {
+        logger.debug('Profile needs setup, showing modal');
+        showProfileSetup(session.user);
+      } else {
+        // Profile exists, proceed to home
+        logger.debug('Profile verified, proceeding to home');
+      }
+
+      setLoading(false);
+      setLoadingStatus(null);
+    };
+
+    runProfileCheck();
+  }, [session?.user?.id]); // Only re-run when user ID changes
 
   useEffect(() => {
     // Handle deep links
@@ -686,53 +712,34 @@ export default function App() {
     setSession(null);
   };
 
-  // Use simple ActivityIndicator for initial load - this runs before ErrorBoundary
-  // so we need the most stable, basic component possible to prevent crashes
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#DC2626" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
+  // Determine if we're in initializing state (checking session, not yet ready)
+  const isInitializing = loading && !session;
 
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         <ThemeProvider>
-          {session ? <HomeScreen /> : <LoginScreen />}
-          <StatusBar style="auto" />
+          <ThemedAlertProvider>
+            {session ? <HomeScreen /> : <LoginScreen initializing={isInitializing} loadingStatus={loadingStatus} />}
+            <StatusBar style="auto" />
 
-          {/* Profile Setup Modal */}
-          <ProfileSetupModal
-            visible={needsProfileSetup}
-            displayName={newDisplayName}
-            onChangeDisplayName={setNewDisplayName}
-            onConfirm={handleCreateProfile}
-            onCancel={handleCancelSetup}
-            loading={creatingProfile}
-          />
+            {/* Profile Setup Modal */}
+            <ProfileSetupModal
+              visible={needsProfileSetup}
+              displayName={newDisplayName}
+              onChangeDisplayName={setNewDisplayName}
+              onConfirm={handleCreateProfile}
+              onCancel={handleCancelSetup}
+              loading={creatingProfile}
+            />
+          </ThemedAlertProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
-  },
-});
+// No App-level styles needed - LoginScreen handles its own loading UI
 
 // Themed styles for the profile setup modal
 const createModalStyles = (theme: Theme) =>

@@ -78,11 +78,16 @@ const LOADING_MESSAGES = [
   'Verifying bragging rights...',
 ];
 
+// Cache stats data at module level to persist across navigations
+let cachedUserStats: UserStats | null = null;
+let cachedOverallStats: OverallStats | null = null;
+
 export default function GameStatsScreen({ navigation, onOpenProfile }: GameStatsScreenProps) {
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache - show cached data immediately
+  const [loading, setLoading] = useState(cachedUserStats === null); // Only show loading if no cache
   const [refreshing, setRefreshing] = useState(false);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
-  const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(cachedUserStats);
+  const [overallStats, setOverallStats] = useState<OverallStats | null>(cachedOverallStats);
   const [error, setError] = useState<string | null>(null);
   const [playerSortMode, setPlayerSortMode] = useState<PlayerSortMode>('games');
   const [activeModal, setActiveModal] = useState<DetailModal>(null);
@@ -178,7 +183,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
 
   const loadStats = async () => {
     const loadStartTime = Date.now();
-    const MIN_LOADING_TIME = 1000; // One full wobble cycle
+    const MIN_LOADING_TIME = 0; // Removed delay for faster navigation
 
     if (!refreshing) {
       setLoading(true);
@@ -208,11 +213,12 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         .eq('user_id', userId);
 
       const userEntries = myGamePlayers || [];
-      const totalGames = userEntries.length;
-      const activeGames = userEntries.filter(entry => entry.game?.status === 'active').length;
-      const completedGames = userEntries.filter(entry => entry.game?.status === 'ended').length;
-      const endedGameIds = userEntries.filter(entry => entry.game?.status === 'ended').map(entry => entry.game_id);
-      const playerIds = userEntries.map(entry => entry.id);
+      // Only count completed games for stats
+      const completedEntries = userEntries.filter(entry => entry.game?.status === 'ended');
+      const completedGamesCount = completedEntries.length;
+      const endedGameIds = completedEntries.map(entry => entry.game_id);
+      // Player IDs only from completed games (for filtering turns)
+      const completedPlayerIds = completedEntries.map(entry => entry.id);
 
       // All players for ended games (used to figure out wins)
       const { data: endedGamePlayers } = endedGameIds.length > 0
@@ -222,8 +228,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
             .in('game_id', endedGameIds)
         : { data: [] as any[] };
 
-      // All turns for the current user (across games) - include turn info for best turn detail and bust streaks
-      const { data: myTurns } = playerIds.length > 0
+      // All turns for the current user from COMPLETED games only
+      const { data: myTurns } = completedPlayerIds.length > 0
         ? await supabase
             .from('turns')
             .select(`
@@ -233,7 +239,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
               turn_number,
               game_id
             `)
-            .in('player_id', playerIds)
+            .in('player_id', completedPlayerIds)
             .order('game_id')
             .order('turn_number')
         : { data: [] as any[] };
@@ -250,20 +256,18 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           }
         });
 
-        userEntries.forEach((entry) => {
-          if (entry.game?.status === 'ended') {
-            const topScore = grouped[entry.game_id] || 0;
-            if ((entry.total_score || 0) >= topScore && topScore > 0) {
-              wins += 1;
-            }
+        completedEntries.forEach((entry) => {
+          const topScore = grouped[entry.game_id] || 0;
+          if ((entry.total_score || 0) >= topScore && topScore > 0) {
+            wins += 1;
           }
         });
       }
 
-      // Find best score and its game details
+      // Find best score and its game details (from completed games only)
       let bestScore = 0;
       let bestScoreGame: GameDetail | null = null;
-      userEntries.forEach(entry => {
+      completedEntries.forEach(entry => {
         if ((entry.total_score || 0) > bestScore) {
           bestScore = entry.total_score || 0;
           if (entry.game) {
@@ -277,10 +281,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         }
       });
 
-      const averageScore = completedGames > 0
-        ? userEntries
-            .filter(entry => entry.game?.status === 'ended')
-            .reduce((sum, entry) => sum + (entry.total_score || 0), 0) / completedGames
+      const averageScore = completedGamesCount > 0
+        ? completedEntries.reduce((sum, entry) => sum + (entry.total_score || 0), 0) / completedGamesCount
         : 0;
 
       // Find best turn and its details
@@ -297,11 +299,11 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           }
         });
 
-      // Get game details for best turn
+      // Get game details for best turn (from completed games only)
       let bestTurnDetail: BestTurnDetail | null = null;
       if (bestTurnPlayerId) {
         // Find the game_player entry to get game details
-        const bestTurnEntry = userEntries.find(e => e.id === bestTurnPlayerId);
+        const bestTurnEntry = completedEntries.find(e => e.id === bestTurnPlayerId);
         if (bestTurnEntry?.game) {
           bestTurnDetail = {
             gameId: bestTurnEntry.game.id,
@@ -314,8 +316,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       }
 
       // Build completed games list for avg score popup
-      const completedGamesList: GameDetail[] = userEntries
-        .filter(entry => entry.game?.status === 'ended')
+      const completedGamesList: GameDetail[] = completedEntries
         .map(entry => ({
           gameId: entry.game?.id || entry.game_id,
           joinCode: entry.game?.join_code || '------',
@@ -360,8 +361,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         });
       }
 
-      setUserStats({
-        totalGames,
+      const newUserStats = {
+        totalGames: completedGamesCount,
         wins,
         bestScore,
         bestScoreGame,
@@ -371,42 +372,52 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         bestTurnDetail,
         completedGames: completedGamesList,
         longestBustStreak,
-      });
+      };
+      setUserStats(newUserStats);
+      cachedUserStats = newUserStats; // Update cache
 
-      // Overall stats across all players/games
+      // Overall stats across all players/games (COMPLETED GAMES ONLY)
       const { data: allGames } = await supabase
         .from('games')
-        .select('id, status, total_rounds');
+        .select('id, status, total_rounds')
+        .eq('status', 'ended');
 
-      const { data: allGamePlayers } = await supabase
-        .from('game_players')
-        .select(`
-          id,
-          game_id,
-          user_id,
-          player_name,
-          total_score,
-          user:profiles(display_name)
-        `);
+      const allCompletedGames = allGames || [];
 
-      // Get all turns for average rounds per game, average score per round, and bust streaks
-      const { data: allTurns } = await supabase
-        .from('turns')
-        .select('id, game_id, player_id, turn_number, score, is_bust')
-        .order('game_id')
-        .order('player_id')
-        .order('turn_number');
+      // Only get players from completed games
+      const { data: allGamePlayers } = allCompletedGames.length > 0
+        ? await supabase
+            .from('game_players')
+            .select(`
+              id,
+              game_id,
+              user_id,
+              player_name,
+              total_score,
+              user:profiles(display_name)
+            `)
+            .in('game_id', allCompletedGames.map(g => g.id))
+        : { data: [] as any[] };
 
-      const gamesList = allGames || [];
+      // Get all turns from completed games only
+      const { data: allTurns } = allCompletedGames.length > 0
+        ? await supabase
+            .from('turns')
+            .select('id, game_id, player_id, turn_number, score, is_bust')
+            .in('game_id', allCompletedGames.map(g => g.id))
+            .order('game_id')
+            .order('player_id')
+            .order('turn_number')
+        : { data: [] as any[] };
+
       const playersList = allGamePlayers || [];
       const turnsList = allTurns || [];
-      const endedGameSet = new Set(gamesList.filter(game => game.status === 'ended').map(game => game.id));
 
-      const totalGamesTracked = gamesList.length;
-      const averagePlayersPerGame = totalGamesTracked > 0 ? playersList.length / totalGamesTracked : 0;
+      const totalCompletedGames = allCompletedGames.length;
+      const averagePlayersPerGame = totalCompletedGames > 0 ? playersList.length / totalCompletedGames : 0;
 
       // Calculate average rounds per game from total_rounds field (the actual game rounds, not turn entries)
-      const gamesWithRounds = gamesList.filter(g => g.total_rounds && g.total_rounds > 0);
+      const gamesWithRounds = allCompletedGames.filter(g => g.total_rounds && g.total_rounds > 0);
       const totalRoundsSum = gamesWithRounds.reduce((sum, g) => sum + (g.total_rounds || 0), 0);
       const averageRoundsPerGame = gamesWithRounds.length > 0 ? totalRoundsSum / gamesWithRounds.length : 0;
 
@@ -417,19 +428,17 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       }, 0);
       const overallAvgScorePerRound = turnsList.length > 0 ? allTurnScores / turnsList.length : 0;
 
-      // Find high score (from completed games)
-      const highScoreEntry = playersList
-        .filter(player => endedGameSet.has(player.game_id))
-        .reduce((top, player) => {
-          if (!top || (player.total_score || 0) > (top.total_score || 0)) {
-            return player;
-          }
-          return top;
-        }, null as any);
+      // Find high score (all players are already from completed games)
+      const highScoreEntry = playersList.reduce((top, player) => {
+        if (!top || (player.total_score || 0) > (top.total_score || 0)) {
+          return player;
+        }
+        return top;
+      }, null as any);
 
-      // Find low score (from completed games, must have a score > 0)
+      // Find low score (must have a score > 0)
       const lowScoreEntry = playersList
-        .filter(player => endedGameSet.has(player.game_id) && (player.total_score || 0) > 0)
+        .filter(player => (player.total_score || 0) > 0)
         .reduce((lowest, player) => {
           if (!lowest || (player.total_score || 0) < (lowest.total_score || Infinity)) {
             return player;
@@ -438,6 +447,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         }, null as any);
 
       // Track player activity with total scores for average calculation
+      // All players are already from completed games only
       const playerActivity: Record<string, { name: string; games: number; totalScore: number }> = {};
       playersList.forEach((player) => {
         const key = player.user_id || `guest-${player.player_name}`;
@@ -446,10 +456,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
           playerActivity[key] = { name: displayName, games: 0, totalScore: 0 };
         }
         playerActivity[key].games += 1;
-        // Only count scores from completed games
-        if (endedGameSet.has(player.game_id)) {
-          playerActivity[key].totalScore += player.total_score || 0;
-        }
+        playerActivity[key].totalScore += player.total_score || 0;
       });
 
       const mostActivePlayers = Object.values(playerActivity)
@@ -499,8 +506,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         : null;
       const bustStreakPlayerName = bustStreakPlayer ? getPlayerLabel(bustStreakPlayer) : '—';
 
-      setOverallStats({
-        totalGames: totalGamesTracked,
+      const newOverallStats = {
+        totalGames: totalCompletedGames,
         averagePlayersPerGame,
         averageRoundsPerGame,
         highScore: highScoreEntry?.total_score || 0,
@@ -511,7 +518,9 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         mostActivePlayers,
         longestBustStreak: overallLongestBustStreak,
         longestBustStreakPlayer: bustStreakPlayerName,
-      });
+      };
+      setOverallStats(newOverallStats);
+      cachedOverallStats = newOverallStats; // Update cache
     } catch (err) {
       console.error('Error loading stats', err);
       setError('Failed to load game stats.');
@@ -555,9 +564,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
             <View style={styles.masonryContainer}>
               <View style={styles.masonryColumn}>
                 <HighlightStatCard
-                  label="Wins"
+                  label={userStats.totalGames > 0 ? `Wins (${Math.round((userStats.wins / userStats.totalGames) * 100)}%)` : 'Wins'}
                   value={userStats.totalGames > 0 ? `${userStats.wins}` : '0'}
-                  subtext={userStats.totalGames > 0 ? `${Math.round((userStats.wins / userStats.totalGames) * 100)}% win rate` : undefined}
                   variant="success"
                 />
                 <ClickableStatCard
@@ -598,9 +606,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
               <View style={styles.masonryContainer}>
                 <View style={styles.masonryColumn}>
                   <HighlightStatCard
-                    label="High Score"
+                    label={`High Score • ${overallStats.highScorePlayer}`}
                     value={overallStats.highScore}
-                    subtext={`By ${overallStats.highScorePlayer}`}
                     variant="accent"
                   />
                   <StatCard label="Total Games" value={overallStats.totalGames} />
@@ -625,29 +632,38 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                   />
                 </View>
               </View>
+            </>
+          ) : (
+            <Text style={styles.emptyText}>Overall stats will show up once games are played.</Text>
+          )}
+        </View>
 
-              <View style={styles.listCard}>
-                <View style={styles.listHeader}>
-                  <Text style={styles.listTitle}>Leaderboard</Text>
-                  <View style={styles.sortToggle}>
-                    <TouchableOpacity
-                      style={[styles.sortButton, playerSortMode === 'games' && styles.sortButtonActive]}
-                      onPress={() => setPlayerSortMode('games')}
-                    >
-                      <Text style={[styles.sortButtonText, playerSortMode === 'games' && styles.sortButtonTextActive]}>
-                        By Games
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.sortButton, playerSortMode === 'avgScore' && styles.sortButtonActive]}
-                      onPress={() => setPlayerSortMode('avgScore')}
-                    >
-                      <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
-                        By Score
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Leaderboard</Text>
+            {overallStats && (
+              <View style={styles.sortToggle}>
+                <TouchableOpacity
+                  style={[styles.sortButton, playerSortMode === 'games' && styles.sortButtonActive]}
+                  onPress={() => setPlayerSortMode('games')}
+                >
+                  <Text style={[styles.sortButtonText, playerSortMode === 'games' && styles.sortButtonTextActive]}>
+                    By Games
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.sortButton, playerSortMode === 'avgScore' && styles.sortButtonActive]}
+                  onPress={() => setPlayerSortMode('avgScore')}
+                >
+                  <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
+                    By Score
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          {overallStats ? (
+            <View style={styles.listCard}>
               {sortedPlayers.length === 0 ? (
                 <Text style={styles.emptyText}>No data yet.</Text>
               ) : (
@@ -665,10 +681,9 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                 </ScrollView>
               )}
             </View>
-          </>
-        ) : (
-          <Text style={styles.emptyText}>Overall stats will show up once games are played.</Text>
-        )}
+          ) : (
+            <Text style={styles.emptyText}>No leaderboard data yet.</Text>
+          )}
         </View>
       </ScrollView>
 
@@ -807,6 +822,12 @@ const createStyles = ({ colors }: Theme) =>
       fontWeight: '700',
       color: colors.textPrimary,
       marginTop: 10,
+      marginBottom: 10,
+    },
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: 10,
     },
     cardGrid: {

@@ -5,13 +5,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   TextInput,
   Modal,
   Dimensions,
-  Platform,
 } from 'react-native';
-import { ThemedLoader } from '../components';
+import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import {
   getGamePlayers,
@@ -46,15 +44,35 @@ const DEFAULT_ROWS = 10;
 const MIN_ROUNDS = 5;
 const MAX_ROUNDS = 30;
 
+// Cache game data at module level to persist across navigations (keyed by gameId)
+interface GameCache {
+  players: GamePlayer[];
+  turns: Turn[];
+  game: Game | null;
+  totalRows: number;
+  userId: string | null;
+}
+const gameCache = new Map<string, GameCache>();
+
+function getCachedGame(gameId: string): GameCache | null {
+  return gameCache.get(gameId) || null;
+}
+
+function setCachedGame(gameId: string, data: GameCache): void {
+  gameCache.set(gameId, data);
+}
+
 function getDisplayName(player: GamePlayer) {
   return player.player_name || 'Player';
 }
 
 const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProps, ref) => {
-  const [players, setPlayers] = useState<GamePlayer[]>([]);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [game, setGame] = useState<Game | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache if available for this game
+  const cached = getCachedGame(gameId);
+  const [players, setPlayers] = useState<GamePlayer[]>(cached?.players || []);
+  const [turns, setTurns] = useState<Turn[]>(cached?.turns || []);
+  const [game, setGame] = useState<Game | null>(cached?.game || null);
+  const [loading, setLoading] = useState(cached === null); // Only show loading if no cache
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<GamePlayer | null>(null);
   const [selectedTurn, setSelectedTurn] = useState<Turn | null>(null);
@@ -63,7 +81,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const [isBust, setIsBust] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [totalRows, setTotalRows] = useState(DEFAULT_ROWS);
+  const [totalRows, setTotalRows] = useState(cached?.totalRows ?? DEFAULT_ROWS);
   const [fontScale, setFontScale] = useState(1);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamePlayer, setRenamePlayer] = useState<GamePlayer | null>(null);
@@ -71,12 +89,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [userId, setUserId] = useState<string | null>(cached?.userId || null);
+  const [loadedOnce, setLoadedOnce] = useState(cached !== null); // Already loaded if cached
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
 
   const { theme } = useTheme();
+  const alert = useThemedAlert();
   const screenWidth = Dimensions.get('window').width;
 
   useImperativeHandle(ref, () => ({
@@ -84,7 +103,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   }));
 
   useEffect(() => {
-    setTotalRows(DEFAULT_ROWS); // start each game at 10 rounds by default
+    // Only reset to default if no cache exists for this game
+    if (!getCachedGame(gameId)) {
+      setTotalRows(DEFAULT_ROWS);
+    }
     loadAll();
   }, [gameId]);
 
@@ -104,9 +126,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
 
   const loadAll = async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner if we don't have cached data
+      if (!getCachedGame(gameId)) {
+        setLoading(true);
+      }
       const { data: userData } = await supabase.auth.getUser();
-      setUserId(userData?.user?.id || null);
+      const currentUserId = userData?.user?.id || null;
+      setUserId(currentUserId);
       const [gamePlayers, gameTurns, gameData] = await Promise.all([
         getGamePlayers(gameId),
         getGameTurns(gameId),
@@ -114,16 +140,27 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       ]);
       setPlayers(gamePlayers);
       setTurns(gameTurns);
+      let currentTotalRows = DEFAULT_ROWS;
       if (gameData.data) {
         setGame(gameData.data as Game);
         if (typeof (gameData.data as any).total_rounds === 'number') {
-          setTotalRows((gameData.data as any).total_rounds);
+          currentTotalRows = (gameData.data as any).total_rounds;
+          setTotalRows(currentTotalRows);
         }
       }
       setLoadedOnce(true);
+
+      // Update cache with fresh data
+      setCachedGame(gameId, {
+        players: gamePlayers,
+        turns: gameTurns,
+        game: gameData.data as Game | null,
+        totalRows: currentTotalRows,
+        userId: currentUserId,
+      });
     } catch (error) {
       console.error('Error loading game data', error);
-      Alert.alert('Error', 'Failed to load game data');
+      alert.show({ title: 'Error', message: 'Failed to load game data' });
     } finally {
       setLoading(false);
     }
@@ -166,7 +203,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     if (players.length === 0) return;
     const stillInGame = players.some((p) => p.user_id === userId);
     if (!stillInGame) {
-      Alert.alert('You have left the game');
+      alert.show({ title: 'You have left the game' });
       onGameRemoved?.();
       onBack();
     }
@@ -218,23 +255,27 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const openCell = (player: GamePlayer, round: number, action: CellAction) => {
     const turn = scoreMap.get(player.id)?.get(round);
     if (action === 'delete' && turn) {
-      Alert.alert('Delete score', 'Remove this score?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteTurn(turn.id, turn.player_id, turn.score, turn.is_bust);
-              await loadAll();
-              pushGameRefresh('score_change');
-            } catch (err) {
-              console.error(err);
-              Alert.alert('Error', 'Failed to delete score');
-            }
+      alert.show({
+        title: 'Delete score',
+        message: 'Remove this score?',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteTurn(turn.id, turn.player_id, turn.score, turn.is_bust);
+                await loadAll();
+                pushGameRefresh('score_change');
+              } catch (err) {
+                console.error(err);
+                alert.show({ title: 'Error', message: 'Failed to delete score' });
+              }
+            },
           },
-        },
-      ]);
+        ],
+      });
       return;
     }
 
@@ -270,7 +311,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         pushGameRefresh('score_change');
       } catch (err) {
         console.error(err);
-        Alert.alert('Error', 'Failed to reset score');
+        alert.show({ title: 'Error', message: 'Failed to reset score' });
       }
       return;
     }
@@ -298,28 +339,32 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       pushGameRefresh('score_change');
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to save score');
+      alert.show({ title: 'Error', message: 'Failed to save score' });
     }
   };
 
   const deleteWholeRound = (round: number) => {
-    Alert.alert('Delete round', 'Remove all scores for this round?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteRound(gameId, round);
-            await loadAll();
-            pushGameRefresh('score_change');
-          } catch (err) {
-            console.error(err);
-            Alert.alert('Error', 'Failed to delete round');
-          }
+    alert.show({
+      title: 'Delete round',
+      message: 'Remove all scores for this round?',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRound(gameId, round);
+              await loadAll();
+              pushGameRefresh('score_change');
+            } catch (err) {
+              console.error(err);
+              alert.show({ title: 'Error', message: 'Failed to delete round' });
+            }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleRemovePlayer = async (playerId: string) => {
@@ -329,7 +374,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       pushGameRefresh('player_change');
     } catch (error) {
       console.error('Error removing player', error);
-      Alert.alert('Error', 'Failed to remove player');
+      alert.show({ title: 'Error', message: 'Failed to remove player' });
     }
   };
 
@@ -340,25 +385,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       pushGameRefresh('player_change');
     } catch (error) {
       console.error('Error updating player order', error);
-      Alert.alert('Error', 'Failed to update player order');
+      alert.show({ title: 'Error', message: 'Failed to update player order' });
     }
   };
 
   const handleApplyRounds = async (target: number): Promise<boolean> => {
     if (target > MAX_ROUNDS) {
-      if (Platform.OS === 'web') {
-        window.alert(`Max rounds reached. You can have at most ${MAX_ROUNDS} rounds.`);
-      } else {
-        Alert.alert('Max rounds reached', `You can have at most ${MAX_ROUNDS} rounds.`);
-      }
+      alert.show({ title: 'Max rounds reached', message: `You can have at most ${MAX_ROUNDS} rounds.` });
       return false;
     }
     if (target < MIN_ROUNDS) {
-      if (Platform.OS === 'web') {
-        window.alert(`Min rounds reached. You must keep at least ${MIN_ROUNDS} rounds.`);
-      } else {
-        Alert.alert('Min rounds reached', `You must keep at least ${MIN_ROUNDS} rounds.`);
-      }
+      alert.show({ title: 'Min rounds reached', message: `You must keep at least ${MIN_ROUNDS} rounds.` });
       return false;
     }
 
@@ -376,11 +413,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         const end = affectedRounds[affectedRounds.length - 1];
         const rangeText = start === end ? `round ${start}` : `rounds ${start}-${end}`;
         const message = `Cannot remove rounds. Non-empty scores found in ${rangeText}. Please clear these scores before reducing rounds.`;
-        if (Platform.OS === 'web') {
-          window.alert(message);
-        } else {
-          Alert.alert('Cannot remove rounds', message, [{ text: 'OK' }]);
-        }
+        alert.show({ title: 'Cannot remove rounds', message });
         return false;
       }
     }
@@ -390,11 +423,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setTotalRows(clamped);
     } catch (err) {
       console.error('Failed to update rounds', err);
-      if (Platform.OS === 'web') {
-        window.alert('Error: Could not update rounds. Please try again.');
-      } else {
-        Alert.alert('Error', 'Could not update rounds. Please try again.');
-      }
+      alert.show({ title: 'Error', message: 'Could not update rounds. Please try again.' });
       return false;
     }
 
@@ -414,9 +443,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await addGuestPlayer(gameId, trimmed);
       await loadAll();
       pushGameRefresh('player_change');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding player', error);
-      Alert.alert('Error', 'Failed to add player');
+      alert.show({ title: 'Error', message: error.message || 'Failed to add player' });
     }
   };
 
@@ -431,7 +460,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     if (!renamePlayer) return;
     const trimmed = renameInput.trim();
     if (!trimmed) {
-      Alert.alert('Name required', 'Please enter a name.');
+      alert.show({ title: 'Name required', message: 'Please enter a name.' });
       return;
     }
     try {
@@ -443,7 +472,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       pushGameRefresh('player_change');
     } catch (error) {
       console.error('Error renaming player', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to rename player');
+      alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to rename player' });
     }
   };
 
@@ -549,33 +578,25 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await deleteGame(gameId);
       pushGameRefresh('game_deleted');
       setShowSettingsModal(false);
-      Alert.alert('Game deleted', 'This game has been removed.');
+      alert.show({ title: 'Game deleted', message: 'This game has been removed.' });
       onGameRemoved?.();
       onBack();
     } catch (error) {
       console.error('Error deleting game', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete game');
+      alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to delete game' });
     }
   };
 
   const handleReopenGame = async () => {
     try {
       await reopenGame(gameId);
-      await loadGame();
+      await loadAll();
       setShowSettingsModal(false);
-      if (Platform.OS === 'web') {
-        window.alert('Game re-opened. You can now make changes and finish the game again.');
-      } else {
-        Alert.alert('Game Re-opened', 'You can now make changes and finish the game again.');
-      }
+      alert.show({ title: 'Game Re-opened', message: 'You can now make changes and finish the game again.' });
     } catch (error) {
       console.error('Error reopening game', error);
       const message = error instanceof Error ? error.message : 'Failed to re-open game';
-      if (Platform.OS === 'web') {
-        window.alert(message);
-      } else {
-        Alert.alert('Error', message);
-      }
+      alert.show({ title: 'Error', message });
     }
   };
 
@@ -618,11 +639,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const handleFinishGame = async () => {
     console.log('Finish game clicked for gameId:', gameId);
     if (eligibleWinners.length === 0) {
-      Alert.alert('No winner', 'No player has reached 10,000 points yet.');
+      alert.show({ title: 'No winner', message: 'No player has reached 10,000 points yet.' });
       return;
     }
     if (!selectedWinnerId) {
-      Alert.alert('Select winner', 'Please select the winning player.');
+      alert.show({ title: 'Select winner', message: 'Please select the winning player.' });
       return;
     }
     setFinishing(true);
@@ -632,12 +653,12 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await finishGame(gameId, selectedWinnerId, winningScore);
       pushGameRefresh('game_finished');
       setShowFinishConfirm(false);
-      Alert.alert('Game finished', 'This game has been marked complete.');
+      alert.show({ title: 'Game finished', message: 'This game has been marked complete.' });
       onGameRemoved?.();
       onBack();
     } catch (error) {
       console.error('Error finishing game', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to finish game');
+      alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to finish game' });
     } finally {
       setFinishing(false);
     }
@@ -751,14 +772,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     style={[styles.cell, styles.playerCell, styles.headerCell, { width: playerColWidth }]}
                     activeOpacity={p.is_guest && game?.status === 'active' ? 0.7 : 1}
                     onPress={() => openRenameGuest(p)}
-                    disabled={game?.status !== 'active'}
-                    accessibilityLabel={`Player ${getDisplayName(p)}${p.is_guest ? ', guest' : ''}`}
+                    disabled={!p.is_guest || game?.status !== 'active'}
+                    accessibilityLabel={`Player ${getDisplayName(p)}${p.is_guest ? ', guest, tap to rename' : ''}`}
                     accessibilityRole="button"
                     accessibilityHint={p.is_guest ? 'Tap to rename guest' : ''}
                   >
-                    <Text style={styles.headerText} numberOfLines={2}>
+                    <Text style={p.is_guest ? styles.guestHeaderText : styles.headerText} numberOfLines={2}>
                       {getDisplayName(p)}
                     </Text>
+                    {p.is_guest && game?.status === 'active' && (
+                      <Text style={styles.guestEditHint}>tap to edit</Text>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -911,7 +935,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                       .then(loadAll)
                       .catch((err) => {
                         console.error(err);
-                        Alert.alert('Error', 'Failed to reset score');
+                        alert.show({ title: 'Error', message: 'Failed to reset score' });
                       });
                   }
                   setShowScoreModal(false);
@@ -984,6 +1008,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                 <Text style={styles.closeX}>×</Text>
               </TouchableOpacity>
             </View>
+            <View style={{ height: 16 }} />
             <TextInput
               style={styles.input}
               placeholder="Guest name"
@@ -1188,7 +1213,8 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     tableContainer: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingVertical: 4,
+      paddingTop: 4,
+      paddingBottom: 16,
     },
     tableSurface: {
       backgroundColor: colors.surface,
@@ -1198,8 +1224,8 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       overflow: 'hidden',
     },
     tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.divider },
-    headerRow: { backgroundColor: colors.accentLight },
-    headerCell: { backgroundColor: colors.accentLight },
+    headerRow: { backgroundColor: colors.surfaceSecondary },
+    headerCell: { backgroundColor: colors.surfaceSecondary },
     cell: {
       padding: cellPadding,
       justifyContent: 'center',
@@ -1212,9 +1238,20 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     roundCell: { width: roundWidth },
     playerCell: { width: playerWidth },
     headerText: { color: colors.textPrimary, fontWeight: '700', fontSize: 14 * scale },
+    guestHeaderText: {
+      color: colors.textPrimary,
+      fontWeight: '700',
+      fontSize: 14 * scale,
+      fontStyle: 'italic',
+    },
+    guestEditHint: {
+      color: colors.textSecondary,
+      fontSize: 10 * scale,
+      marginTop: 2,
+    },
     roundText: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 * scale },
     cellText: { color: colors.textPrimary, fontSize: 14 * scale },
-    bustText: { color: '#ff4444', fontSize: 14 * scale },
+    bustText: { color: colors.error, fontSize: 14 * scale },
     strikethrough: { textDecorationLine: 'line-through' },
     totalRow: {
       backgroundColor: colors.surfaceSecondary,
@@ -1245,6 +1282,7 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       backgroundColor: colors.inputBackground,
       marginBottom: 12,
     },
+    modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 },
     modalButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
     quickScoreRow: {
       flexDirection: 'row',
@@ -1279,13 +1317,13 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       alignItems: 'center',
       justifyContent: 'center',
     },
-    saveButton: { backgroundColor: '#1b8733' },
-    saveButtonDisabled: { backgroundColor: '#9acfa8' },
-    bustButton: { backgroundColor: '#d32f2f' },
+    saveButton: { backgroundColor: colors.success },
+    saveButtonDisabled: { backgroundColor: colors.success, opacity: 0.5 },
+    bustButton: { backgroundColor: colors.error },
     resetButton: { backgroundColor: colors.surfaceSecondary },
     cancelButton: { backgroundColor: colors.surfaceSecondary },
     modalButtonText: { color: colors.buttonText, fontWeight: '600' },
-    inputBust: { color: '#d32f2f', textDecorationLine: 'line-through' },
+    inputBust: { color: colors.error, textDecorationLine: 'line-through' },
     inputErrorContainer: {
       position: 'absolute',
       right: 8,
@@ -1331,7 +1369,7 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       justifyContent: 'center',
       alignItems: 'flex-end',
     },
-    errorText: { color: '#d32f2f', fontWeight: '700', flexWrap: 'nowrap' },
+    errorText: { color: colors.error, fontWeight: '700', flexWrap: 'nowrap' },
     modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     closeX: { fontSize: 20, color: colors.textPrimary, fontWeight: '800' },
     previewScroll: { maxHeight: 320, marginTop: 8, marginBottom: 12 },

@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
-  Alert,
   TextInput,
 } from 'react-native';
-import { ThemedLoader } from '../components';
+import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import { createGame } from '../lib/database';
+import { validatePlayerName } from '../lib/validation';
 import { Profile } from '../lib/types';
 import { Theme, useTheme } from '../lib/theme';
 
@@ -29,6 +29,7 @@ export default function CreateGameScreen({
 }: CreateGameScreenProps) {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const alert = useThemedAlert();
   const [availablePlayers, setAvailablePlayers] = useState<Profile[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
     new Set([currentUserId])
@@ -93,7 +94,7 @@ export default function CreateGameScreen({
       setAvailablePlayers(sorted.filter((p) => p.id !== currentUserId));
     } catch (error) {
       console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
+      alert.show({ title: 'Error', message: 'Failed to load users' });
     } finally {
       setLoading(false);
     }
@@ -102,7 +103,7 @@ export default function CreateGameScreen({
   const toggleUser = (userId: string) => {
     const newSelected = new Set(selectedUserIds);
     if (userId === currentUserId) {
-      Alert.alert('Notice', 'You are always included in the game');
+      alert.show({ title: 'Notice', message: 'You are always included in the game' });
       return;
     }
     if (newSelected.has(userId)) {
@@ -114,11 +115,12 @@ export default function CreateGameScreen({
   };
 
   const addGuestPlayer = () => {
-    if (!guestName.trim()) {
-      Alert.alert('Error', 'Please enter a guest name');
+    const validation = validatePlayerName(guestName);
+    if (!validation.isValid) {
+      alert.show({ title: 'Error', message: validation.error || 'Invalid guest name' });
       return;
     }
-    setGuestPlayers([...guestPlayers, guestName.trim()]);
+    setGuestPlayers([...guestPlayers, validation.sanitized!]);
     setGuestName('');
   };
 
@@ -133,7 +135,7 @@ export default function CreateGameScreen({
     console.log('Current user:', currentUserId, currentUserName);
 
     if (selectedUserIds.size === 0 && guestPlayers.length === 0) {
-      Alert.alert('Error', 'Add at least one player');
+      alert.show({ title: 'Error', message: 'Add at least one player' });
       return;
     }
 
@@ -189,7 +191,7 @@ export default function CreateGameScreen({
       onGameCreated(game.id);
     } catch (error: any) {
       console.error('Error creating game:', error);
-      Alert.alert('Error', JSON.stringify(error.message || error));
+      alert.show({ title: 'Error', message: error.message || 'Failed to create game' });
     } finally {
       setCreating(false);
     }

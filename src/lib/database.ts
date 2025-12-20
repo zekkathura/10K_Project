@@ -587,3 +587,56 @@ export async function deleteGame(gameId: string) {
 
   if (gameError) throw gameError;
 }
+
+/**
+ * Delete user account with proper data handling
+ *
+ * Strategy: Anonymize rather than delete game history
+ * - Game history is preserved for other players' stats
+ * - User's game_players records are anonymized (user_id = NULL, marked as deleted guest)
+ * - Profile is deleted
+ * - User is signed out (auth record remains orphaned but inaccessible)
+ *
+ * @returns Object with activeGames count and success status
+ */
+export async function deleteAccount(userId: string): Promise<{ success: boolean; activeGames: number }> {
+  // Step 1: Check for active games
+  const { data: activeGamePlayers, error: checkError } = await supabase
+    .from('game_players')
+    .select(`
+      id,
+      game:games!inner(id, status)
+    `)
+    .eq('user_id', userId)
+    .eq('games.status', 'active');
+
+  if (checkError) throw checkError;
+
+  const activeGames = activeGamePlayers?.length || 0;
+
+  // Step 2: Anonymize all game_players records for this user
+  // This preserves game history for other players' stats
+  const { error: anonymizeError } = await supabase
+    .from('game_players')
+    .update({
+      user_id: null,
+      is_guest: true,
+      // Keep player_name as-is so historical games still show who played
+    })
+    .eq('user_id', userId);
+
+  if (anonymizeError) throw anonymizeError;
+
+  // Step 3: Delete the profile
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', userId);
+
+  if (profileError) throw profileError;
+
+  // Step 4: Sign out (auth record remains but is orphaned)
+  await supabase.auth.signOut();
+
+  return { success: true, activeGames };
+}

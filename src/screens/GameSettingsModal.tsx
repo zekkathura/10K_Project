@@ -88,7 +88,12 @@ export default function GameSettingsModal({
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Game Settings</Text>
-            <TouchableOpacity onPress={onClose} style={styles.headerClose}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.headerClose}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+            >
               <Text style={styles.headerCloseText}>×</Text>
             </TouchableOpacity>
           </View>
@@ -104,6 +109,8 @@ export default function GameSettingsModal({
                   setSelectedRecentId(null);
                   setGuestName('');
                 }}
+                accessibilityLabel="Add player"
+                accessibilityRole="button"
               >
                 <Text style={styles.rowText}>Add player</Text>
               </TouchableOpacity>
@@ -113,6 +120,8 @@ export default function GameSettingsModal({
                   setMode('remove');
                   setSelectedRemoveIds([]);
                 }}
+                accessibilityLabel="Remove player"
+                accessibilityRole="button"
               >
                 <Text style={styles.rowText}>Remove player</Text>
               </TouchableOpacity>
@@ -122,6 +131,8 @@ export default function GameSettingsModal({
                   setMode('reorder');
                   setOrder(players);
                 }}
+                accessibilityLabel="Change player order"
+                accessibilityRole="button"
               >
                 <Text style={styles.rowText}>Change player order</Text>
               </TouchableOpacity>
@@ -257,15 +268,19 @@ export default function GameSettingsModal({
                         style={[styles.arrow, idx === 0 && styles.arrowDisabled]}
                         onPress={() => moveUp(idx)}
                         disabled={idx === 0}
+                        accessibilityLabel="Move up"
+                        accessibilityRole="button"
                       >
-                        <Text style={styles.arrowText}>^</Text>
+                        <Text style={styles.arrowText}>↑</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.arrow, idx === order.length - 1 && styles.arrowDisabled]}
                         onPress={() => moveDown(idx)}
                         disabled={idx === order.length - 1}
+                        accessibilityLabel="Move down"
+                        accessibilityRole="button"
                       >
-                        <Text style={styles.arrowText}>v</Text>
+                        <Text style={styles.arrowText}>↓</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -436,23 +451,34 @@ export default function GameSettingsModal({
 
 const createStyles = ({ colors }: Theme) =>
   StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
     card: {
       backgroundColor: colors.surface,
-      borderRadius: 12,
-      width: '90%',
+      borderRadius: 16,
+      width: '100%',
       maxWidth: 420,
-      padding: 16,
+      padding: 20,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: colors.textPrimary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     },
     header: {
-      paddingBottom: 10,
+      paddingBottom: 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
     },
-    headerTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+    headerTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
     headerClose: {
       width: 32,
       height: 32,
@@ -463,25 +489,27 @@ const createStyles = ({ colors }: Theme) =>
       borderWidth: 1,
       borderColor: colors.divider,
     },
-    headerCloseText: { fontSize: 20, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
-    subheader: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
-    divider: { height: 1, backgroundColor: colors.divider, marginVertical: 8 },
+    headerCloseText: { fontSize: 20, color: colors.textPrimary, fontWeight: '800' },
+    subheader: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 10, marginTop: 4 },
+    divider: { height: 1, backgroundColor: colors.divider, marginVertical: 10 },
     row: {
       paddingVertical: 14,
-      paddingHorizontal: 10,
+      paddingHorizontal: 14,
       backgroundColor: colors.surfaceSecondary,
-      borderRadius: 8,
+      borderRadius: 10,
       marginBottom: 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       minHeight: 52,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
     rowText: { color: colors.textPrimary, fontWeight: '600', fontSize: 16 },
-    button: { padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 6 },
-    closeButton: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.divider },
+    button: { padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 6 },
+    closeButton: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
     saveButton: { backgroundColor: colors.accent },
-    buttonText: { color: colors.buttonText, fontWeight: '700' },
+    buttonText: { color: colors.buttonText, fontWeight: '600', fontSize: 15 },
     list: { maxHeight: 320 },
     reorderRow: {
       flexDirection: 'row',
@@ -516,10 +544,10 @@ const createStyles = ({ colors }: Theme) =>
     actions: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 12 },
     removeRow: {
       paddingVertical: 12,
-      paddingHorizontal: 10,
-      borderRadius: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
       borderWidth: 1,
-      borderColor: colors.divider,
+      borderColor: colors.border,
       marginBottom: 8,
       backgroundColor: colors.surfaceSecondary,
     },
@@ -528,22 +556,21 @@ const createStyles = ({ colors }: Theme) =>
     rowsControl: { alignItems: 'center' },
     rowsButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     applyButton: {
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
       backgroundColor: colors.accent,
-      borderWidth: 1,
-      borderColor: colors.accent,
     },
-    applyText: { color: colors.buttonText, fontWeight: '700' },
+    applyText: { color: colors.buttonText, fontWeight: '600', fontSize: 14 },
     disabledRow: { opacity: 0.5 },
     mutedText: { color: colors.textSecondary },
     mutedSmall: { color: colors.textSecondary, fontSize: 14 },
     input: {
       borderWidth: 1,
       borderColor: colors.inputBorder,
-      borderRadius: 8,
-      padding: 10,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 16,
       color: colors.inputText,
       backgroundColor: colors.inputBackground,
       marginTop: 8,
@@ -551,16 +578,15 @@ const createStyles = ({ colors }: Theme) =>
     },
     sectionSpacing: { marginBottom: 12 },
     plainRow: { paddingVertical: 6 },
-    groupLabel: { color: colors.textSecondary, fontWeight: '700', marginBottom: 6, marginTop: 4 },
+    groupLabel: { color: colors.textSecondary, fontWeight: '700', fontSize: 13, marginBottom: 8, marginTop: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
     actionRow: {
       borderWidth: 2,
-      borderRadius: 16,
+      borderRadius: 10,
       paddingVertical: 16,
       paddingHorizontal: 14,
       marginBottom: 12,
       justifyContent: 'center',
       alignItems: 'center',
-      gap: 0,
     },
     deleteRow: {
       backgroundColor: colors.errorBackground,

@@ -4,7 +4,6 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "start:test": "dotenv -v TEST_ENV=dev -e .env.test.app -- expo start --port 8082 --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

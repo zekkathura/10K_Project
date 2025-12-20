@@ -175,7 +175,11 @@
       "Bash(cmd.exe /c \"netstat -ano | findstr :8081\")",
       "Bash(del \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\src\\\\components\\\\DiceAnimationShowcase.tsx\")",
       "Bash(cmd.exe:*)",
-      "Bash(timeout /t 3 /nobreak)"
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(ls:*)",
+      "Bash(timeout /t 2 /nobreak)",
+      "Bash(npx eslint:*)",
+      "Bash(node --check:*)"
     ],
     "deny": [],
     "ask": []
