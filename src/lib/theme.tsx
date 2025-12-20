@@ -93,8 +93,8 @@ const darkColors: ThemeColors = {
 
   // Text
   textPrimary: '#FFFFFF',
-  textSecondary: '#FFFFFF',
-  textTertiary: '#D99CE3',
+  textSecondary: '#9CA3AF',  // Gray for secondary info (dates, subtitles)
+  textTertiary: '#6B7280',   // Muted gray for hints
 
   // Borders & Dividers
   border: '#24344D',

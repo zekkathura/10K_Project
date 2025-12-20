@@ -8,6 +8,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Image,
 } from 'react-native';
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
@@ -15,6 +16,20 @@ import { getMyGames, joinGameByCode } from '../lib/database';
 import { Game } from '../lib/types';
 import CreateGameScreen from './CreateGameScreen';
 import { Theme, useThemedStyles } from '../lib/theme';
+
+// Humorous loading messages that cycle every 2 wobble cycles
+const LOADING_MESSAGES = [
+  'Gathering your battles...',
+  'Dusting off the dice...',
+  'Summoning past glories...',
+  'Recalling epic fails...',
+  'Loading your legacy...',
+  'Fetching the carnage...',
+  'Waking the dice gods...',
+  'Reviewing the wreckage...',
+  'Compiling your history...',
+  'Preparing the battlefield...',
+];
 
 interface GamesListScreenProps {
   onGameSelect: (gameId: string, navigate?: boolean) => void;
@@ -38,8 +53,19 @@ export default function GamesListScreen({
   const [userDisplayName, setUserDisplayName] = useState<string>('');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(() => Math.floor(Math.random() * LOADING_MESSAGES.length));
   const lastCreateTrigger = useRef(createGameTrigger);
   const styles = useThemedStyles(createStyles);
+
+  // Cycle loading messages every 2 seconds (2 wobble cycles)
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingMessageIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [loading]);
+
   const activeGames = useMemo(() => {
     const filtered = games
       .filter((game) => game.status === 'active')
@@ -61,8 +87,8 @@ export default function GamesListScreen({
   }, [games]);
 
   const sections = useMemo(() => [
-    { title: `My Active Games (${activeGames.length})`, data: activeGames, type: 'active' as const },
-    { title: `My Completed Games (${completedGames.length})`, data: completedGames, type: 'completed' as const },
+    { title: 'My Active Games', count: activeGames.length, data: activeGames, type: 'active' as const },
+    { title: 'My Completed Games', count: completedGames.length, data: completedGames, type: 'completed' as const },
   ], [activeGames, completedGames]);
 
   useEffect(() => {
@@ -84,8 +110,13 @@ export default function GamesListScreen({
   }, [reloadTrigger]);
 
   const loadGames = async () => {
+    const loadStartTime = Date.now();
+    const MIN_LOADING_TIME = 1000; // One full wobble cycle
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Use getSession instead of getUser - getUser makes a network call that can hang
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
 
       setUserId(user.id);
@@ -142,6 +173,12 @@ export default function GamesListScreen({
     } catch (error) {
       console.error('Error loading games:', error);
     } finally {
+      // Ensure loading shows for at least one full wobble cycle
+      const elapsed = Date.now() - loadStartTime;
+      const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsed);
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+      }
       setLoading(false);
     }
   };
@@ -177,7 +214,7 @@ export default function GamesListScreen({
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedLoader text="Loading games..." />
+        <ThemedLoader text={LOADING_MESSAGES[loadingMessageIndex]} />
       </View>
     );
   }
@@ -212,7 +249,9 @@ export default function GamesListScreen({
         keyExtractor={(item) => item.id}
         renderSectionHeader={({ section }) => (
           <View style={styles.sectionHeaderContainer}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionTitle}>
+              {section.title} <Text style={styles.sectionCount}>({section.count})</Text>
+            </Text>
           </View>
         )}
         renderItem={({ item, section }) => {
@@ -243,7 +282,7 @@ export default function GamesListScreen({
                   <Text style={styles.gameDetailText}>📅 {createdDate}</Text>
                   <Text style={styles.gameDetailText}>👥 {(item as any).player_count || 0} players</Text>
                   {winnerName && (
-                    <Text style={styles.gameDetailText}>🏆 {winnerName}</Text>
+                    <Text style={styles.winnerText}>🏆 {winnerName}</Text>
                   )}
                 </View>
               </View>
@@ -252,9 +291,29 @@ export default function GamesListScreen({
         }}
         renderSectionFooter={({ section }) =>
           section.data.length === 0 ? (
-            <Text style={styles.emptyText}>
-              {section.type === 'active' ? 'No active games. Create or join one!' : 'No completed games yet'}
-            </Text>
+            <View style={styles.emptyContainer}>
+              {section.type === 'active' ? (
+                <Image
+                  source={require('../../assets/images/3D_die.png')}
+                  style={styles.emptyImage}
+                />
+              ) : (
+                <Image
+                  source={require('../../assets/images/trophy.png')}
+                  style={styles.emptyImage}
+                />
+              )}
+              <Text style={styles.emptyText}>
+                {section.type === 'active'
+                  ? 'No active games yet'
+                  : 'No completed games yet'}
+              </Text>
+              {section.type === 'active' && (
+                <Text style={styles.emptySubtext}>
+                  Tap the Play button below to create a game!
+                </Text>
+              )}
+            </View>
           ) : null
         }
         stickySectionHeadersEnabled={false}
@@ -336,6 +395,7 @@ const createStyles = ({ colors }: Theme) =>
     buttonRow: {
       flexDirection: 'row',
       marginBottom: 20,
+      gap: 12,
     },
     actionButton: {
       flex: 1,
@@ -368,15 +428,19 @@ const createStyles = ({ colors }: Theme) =>
     },
     sectionTitle: {
       fontSize: 18,
+      fontWeight: '700',
+      color: colors.textPrimary,  // White for main section titles
+    },
+    sectionCount: {
+      color: colors.accentLight,  // Light blue for the count
       fontWeight: '600',
-      color: colors.textPrimary,
     },
     gameCard: {
-      backgroundColor: colors.background,
-      padding: 8,
-      paddingVertical: 6,
-      borderRadius: 8,
-      marginBottom: 4,
+      backgroundColor: colors.surface,  // Slightly lighter for card contrast
+      padding: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginBottom: 8,
       position: 'relative',
       borderWidth: 1,
       borderColor: colors.border,
@@ -389,7 +453,7 @@ const createStyles = ({ colors }: Theme) =>
       position: 'absolute',
       right: 0,
       top: 0,
-      color: colors.textPrimary,
+      color: colors.accent,  // Blue like UDisc's "LIVE" indicator
       fontWeight: '700',
       fontSize: 12,
     },
@@ -407,11 +471,12 @@ const createStyles = ({ colors }: Theme) =>
       marginBottom: 8,
     },
     gameNameLabel: {
-      fontWeight: '600',
+      fontWeight: '500',
+      color: colors.textSecondary,  // Gray label, blue code
     },
     gameCode: {
-      fontWeight: '400',
-      color: colors.textPrimary,
+      fontWeight: '600',
+      color: colors.accent,  // Blue accent like UDisc uses for scores
     },
     gameDetails: {
       flexDirection: 'row',
@@ -421,12 +486,32 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 13,
       color: colors.textSecondary,
     },
+    winnerText: {
+      fontSize: 13,
+      color: colors.accent,  // Blue accent for winner like UDisc highlights
+      fontWeight: '600',
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      paddingVertical: 30,
+      paddingHorizontal: 20,
+    },
+    emptyImage: {
+      width: 48,
+      height: 48,
+      marginBottom: 12,
+    },
     emptyText: {
-      textAlign: 'left',
+      textAlign: 'center',
+      color: colors.textPrimary,
+      fontSize: 18,
+      fontWeight: '600',
+      marginBottom: 8,
+    },
+    emptySubtext: {
+      textAlign: 'center',
       color: colors.textSecondary,
-      marginTop: 16,
-      marginLeft: 6,
-      fontSize: 16,
+      fontSize: 14,
     },
     modalOverlay: {
       flex: 1,

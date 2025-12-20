@@ -1,3 +1,10 @@
+/**
+ * Authentication Functions
+ * Low-level auth operations for OAuth providers
+ *
+ * Note: For most use cases, use the useAuth hook instead of these functions directly.
+ */
+
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -5,61 +12,64 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { logger } from './logger';
+import { APP_SCHEME, AUTH_TIMEOUTS } from './authConfig';
+import { raceWithTimeout } from './asyncUtils';
 
-// Wrap in try-catch to prevent crashes during module initialization
-// This is called at module load time and can crash on some Android devices
+// Complete any pending auth session (needed for web OAuth redirects)
 try {
   WebBrowser.maybeCompleteAuthSession();
 } catch (error) {
-  // Silently fail - this is only needed for web OAuth redirects
-  console.warn('WebBrowser.maybeCompleteAuthSession failed:', error);
+  logger.debug('maybeCompleteAuthSession failed (non-critical)');
 }
 
-// App scheme - must match app.config.js
-const APP_SCHEME = 'com.10kscorekeeper';
+/**
+ * Simple result type for auth functions
+ */
+interface AuthFunctionResult {
+  success: boolean;
+  error?: string | Error | unknown;
+}
 
-// Get redirect URL based on environment
+/**
+ * Get the appropriate redirect URL based on the current environment
+ */
 function getRedirectUrl(): string {
   // Web uses current origin
   if (Platform.OS === 'web') {
     return window.location.origin;
   }
 
-  // Check if this is a standalone build (not Expo Go)
-  // In standalone builds, appOwnership is null or 'standalone'
-  // In Expo Go, appOwnership is 'expo'
-  const isStandalone = Constants.appOwnership !== 'expo';
+  const appOwnership = Constants.appOwnership;
+  const isStandalone = appOwnership === null && !__DEV__;
 
+  logger.debug('getRedirectUrl:', { appOwnership, __DEV__, isStandalone });
+
+  // For standalone production builds, use direct scheme
   if (isStandalone) {
-    // For standalone/EAS builds, use the app's custom scheme directly
-    // This is required because AuthSession.makeRedirectUri() may return localhost
     return `${APP_SCHEME}://`;
   }
 
-  // For Expo Go, use AuthSession which handles exp:// URLs
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: APP_SCHEME,
-  });
-
-  return redirectUri;
+  // For Expo Go and dev clients, use AuthSession
+  const authSessionUri = AuthSession.makeRedirectUri({ scheme: APP_SCHEME });
+  logger.debug('Using AuthSession URI:', authSessionUri);
+  return authSessionUri;
 }
 
-export async function signInWithGoogle() {
+/**
+ * Sign in with Google OAuth
+ */
+export async function signInWithGoogle(): Promise<AuthFunctionResult> {
   try {
     const redirectTo = getRedirectUrl();
-    logger.debug('Google Auth - Platform:', Platform.OS);
-    logger.debug('Google Auth - Redirect URL:', redirectTo);
-    logger.debug('Google Auth - App Ownership:', Constants.appOwnership);
+    logger.debug('Google Auth - Starting with redirect:', redirectTo);
 
-    // For web, use simple OAuth redirect (page will redirect)
+    // Web: Simple OAuth redirect
     if (Platform.OS === 'web') {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
-          queryParams: {
-            prompt: 'select_account',
-          },
+          queryParams: { prompt: 'select_account' },
         },
       });
 
@@ -67,111 +77,110 @@ export async function signInWithGoogle() {
       return { success: true };
     }
 
-    // For mobile (Expo Go / native), use browser-based OAuth
+    // Mobile: Browser-based OAuth
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
         skipBrowserRedirect: true,
-        queryParams: {
-          prompt: 'select_account',
-        },
+        queryParams: { prompt: 'select_account' },
       },
     });
 
     if (error) throw error;
 
-    if (data?.url) {
-      logger.debug('Opening OAuth session with URL');
-      logger.debug('OAuth URL (first 100 chars):', data.url.substring(0, 100));
-
-      let result;
-      try {
-        result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectTo
-        );
-        logger.debug('WebBrowser result:', JSON.stringify(result, null, 2));
-      } catch (browserError) {
-        logger.error('WebBrowser.openAuthSessionAsync error:', browserError);
-        return { success: false, error: browserError };
-      }
-
-      logger.debug('WebBrowser result type:', result.type);
-
-      if (result.type === 'success') {
-        const { url } = result;
-        logger.debug('Callback URL received (first 100 chars):', url.substring(0, 100));
-
-        // Parse tokens from URL fragment (after #)
-        const fragmentString = url.split('#')[1];
-        logger.debug('Fragment exists:', !!fragmentString);
-
-        const params = new URLSearchParams(fragmentString);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        const errorParam = params.get('error');
-        const errorDescription = params.get('error_description');
-
-        if (errorParam) {
-          logger.error('OAuth error in callback:', errorParam, errorDescription);
-          return { success: false, error: errorDescription || errorParam };
-        }
-
-        logger.debug('Tokens found:', { access: !!accessToken, refresh: !!refreshToken });
-
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          return { success: true };
-        } else {
-          logger.error('Tokens not found in callback URL');
-        }
-      } else {
-        logger.debug('Auth cancelled or failed:', result.type);
-      }
+    if (!data?.url) {
+      return { success: false, error: 'No OAuth URL received' };
     }
 
-    return { success: false, error: 'Authentication cancelled' };
+    logger.debug('Opening browser for OAuth');
+
+    // Open browser for authentication
+    let result;
+    try {
+      result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    } catch (browserError) {
+      logger.error('Browser error:', browserError);
+      return { success: false, error: browserError };
+    }
+
+    logger.debug('Browser result type:', result.type);
+
+    if (result.type !== 'success') {
+      return { success: false, error: 'Authentication cancelled' };
+    }
+
+    // Parse tokens from callback URL
+    const { url } = result;
+    const fragmentString = url.split('#')[1];
+
+    if (!fragmentString) {
+      logger.error('No fragment in callback URL');
+      return { success: false, error: 'Invalid callback URL' };
+    }
+
+    const params = new URLSearchParams(fragmentString);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const errorParam = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    if (errorParam) {
+      logger.error(`OAuth error: ${errorParam}`, errorDescription);
+      return { success: false, error: errorDescription || errorParam };
+    }
+
+    if (!accessToken || !refreshToken) {
+      logger.error('Tokens not found in callback');
+      return { success: false, error: 'No authentication tokens received' };
+    }
+
+    logger.debug('Setting session with tokens');
+    const startTime = Date.now();
+
+    // Set session - let it complete naturally, onAuthStateChange will handle navigation
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      const elapsed = Date.now() - startTime;
+      if (error) {
+        logger.error(`setSession error after ${elapsed}ms:`, error.message);
+        return { success: false, error: error.message };
+      }
+
+      logger.debug(`Session set successfully in ${elapsed}ms`);
+      return { success: true };
+    } catch (err) {
+      const elapsed = Date.now() - startTime;
+      logger.error(`setSession exception after ${elapsed}ms:`, err);
+      return { success: false, error: err };
+    }
   } catch (error) {
-    logger.error('Google sign-in error', error);
+    logger.error('Google sign-in error:', error);
     return { success: false, error };
   }
 }
 
-export async function signOut() {
+/**
+ * Sign in with Apple
+ */
+export async function signInWithApple(): Promise<AuthFunctionResult> {
   try {
-    // Sign out from Supabase (clears session)
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
-    if (error) {
-      logger.error('Sign out error', error);
-      return { success: false, error };
-    }
-    return { success: true };
-  } catch (err) {
-    logger.error('Sign out exception', err);
-    return { success: false, error: err };
-  }
-}
-
-export async function signInWithApple() {
-  try {
-    // For web, use Supabase OAuth
+    // Web: Use Supabase OAuth
     if (Platform.OS === 'web') {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
-        options: {
-          redirectTo: window.location.origin,
-        },
+        options: { redirectTo: window.location.origin },
       });
 
       if (error) throw error;
       return { success: true };
     }
 
-    // For native iOS, use expo-apple-authentication
+    // iOS: Use native Apple Authentication
     const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -180,10 +189,9 @@ export async function signInWithApple() {
     });
 
     // Exchange Apple credential for Supabase session
-    const { data, error } = await supabase.auth.signInWithIdToken({
+    const { error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: credential.identityToken!,
-      nonce: credential.nonce,
     });
 
     if (error) throw error;
@@ -192,11 +200,33 @@ export async function signInWithApple() {
     if (error.code === 'ERR_REQUEST_CANCELED') {
       return { success: false, error: 'Authentication cancelled' };
     }
-    logger.error('Apple sign-in error', error);
+    logger.error('Apple sign-in error:', error);
     return { success: false, error };
   }
 }
 
+/**
+ * Sign out from Supabase
+ */
+export async function signOut(): Promise<AuthFunctionResult> {
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+    if (error) {
+      logger.error('Sign out error:', error);
+      return { success: false, error };
+    }
+
+    return { success: true };
+  } catch (err) {
+    logger.error('Sign out exception:', err);
+    return { success: false, error: err };
+  }
+}
+
+/**
+ * Check if Apple Authentication is available (iOS only)
+ */
 export async function checkAppleAuthAvailability(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
 

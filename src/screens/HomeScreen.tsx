@@ -7,6 +7,7 @@ import GameScreen from './GameScreen';
 import SettingsScreen from './SettingsScreen';
 import GameStatsScreen from './GameStatsScreen';
 import RulesScreen from './RulesScreen';
+import { ThemedLoader } from '../components';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
 type NavTab = 'home' | 'game' | 'play' | 'stats' | 'rules';
@@ -30,6 +31,7 @@ export default function HomeScreen() {
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [playTrigger, setPlayTrigger] = useState(0);
   const [reloadGamesTrigger, setReloadGamesTrigger] = useState(0);
+  const [showNoGameAlert, setShowNoGameAlert] = useState(false);
   const gameScreenRef = useRef<any>(null);
   const styles = useThemedStyles(createStyles);
   const { mode } = useTheme();
@@ -94,13 +96,13 @@ export default function HomeScreen() {
 
   const handleNavigateGame = () => {
     if (!selectedGameId) {
-      // Navigate to home first, then show the message
+      // No game selected - show themed alert modal
       setShowProfileSettings(false);
       setShowGameStats(false);
       setShowRules(false);
       setIsViewingGame(false);
       setCurrentTab('home');
-      showAlert('No Game Selected', 'Create a new game or join an existing one to get started.');
+      setShowNoGameAlert(true);
       return;
     }
     setShowProfileSettings(false);
@@ -310,6 +312,31 @@ export default function HomeScreen() {
           context={activeTab}
         />
       </Modal>
+
+      {/* No Game Selected Alert Modal */}
+      <Modal
+        visible={showNoGameAlert}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowNoGameAlert(false)}
+      >
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertContainer}>
+            <Text style={styles.alertTitle}>No Game Selected</Text>
+            <Text style={styles.alertMessage}>
+              Tap Play to start a new game, or use Join Game to enter a friend's game code.
+            </Text>
+            <TouchableOpacity
+              style={styles.alertButton}
+              onPress={() => setShowNoGameAlert(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Got it"
+            >
+              <Text style={styles.alertButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -377,4 +404,50 @@ const createStyles = ({ colors }: Theme) =>
     playIconImage: { width: 62, height: 62 },
     navLabelPlay: { color: colors.textPrimary, fontWeight: '700', fontSize: 12, marginTop: 2 },
     navLabelPlayActive: { color: PLAY_COLOR },
+    // Themed Alert Modal styles
+    alertOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    alertContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 320,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    alertTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    alertMessage: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'left',
+      marginBottom: 20,
+      lineHeight: 22,
+      alignSelf: 'stretch',
+    },
+    alertButton: {
+      backgroundColor: colors.buttonPrimary,
+      paddingVertical: 12,
+      paddingHorizontal: 32,
+      borderRadius: 8,
+      minWidth: 120,
+    },
+    alertButtonText: {
+      color: colors.buttonText,
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });

@@ -64,6 +64,20 @@ const getPlayerLabel = (player: any) => {
 type PlayerSortMode = 'games' | 'avgScore';
 type DetailModal = 'bestScore' | 'bestTurn' | 'avgScore' | null;
 
+// Humorous loading messages that cycle every 2 wobble cycles
+const LOADING_MESSAGES = [
+  'Counting the carnage...',
+  'Summing the sins...',
+  'Computing the chaos...',
+  'Recounting your bad decisions...',
+  'Replaying your greed...',
+  'Analyzing reckless behavior...',
+  'Checking how hard you pushed it...',
+  'Consulting the dice gods...',
+  'Translating dice into regret...',
+  'Verifying bragging rights...',
+];
+
 export default function GameStatsScreen({ navigation, onOpenProfile }: GameStatsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,8 +86,18 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
   const [error, setError] = useState<string | null>(null);
   const [playerSortMode, setPlayerSortMode] = useState<PlayerSortMode>('games');
   const [activeModal, setActiveModal] = useState<DetailModal>(null);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(() => Math.floor(Math.random() * LOADING_MESSAGES.length));
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
+
+  // Cycle loading messages every 2 seconds (2 wobble cycles)
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingMessageIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const StatCard = ({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) => (
     <View style={styles.statCard}>
@@ -153,6 +177,9 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
   }, []);
 
   const loadStats = async () => {
+    const loadStartTime = Date.now();
+    const MIN_LOADING_TIME = 1000; // One full wobble cycle
+
     if (!refreshing) {
       setLoading(true);
     }
@@ -489,6 +516,12 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       console.error('Error loading stats', err);
       setError('Failed to load game stats.');
     } finally {
+      // Ensure loading shows for at least one full wobble cycle
+      const elapsed = Date.now() - loadStartTime;
+      const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsed);
+      if (remainingTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+      }
       setLoading(false);
     }
   };
@@ -496,7 +529,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ThemedLoader text="Crunching the numbers..." />
+        <ThemedLoader text={LOADING_MESSAGES[loadingMessageIndex]} />
       </View>
     );
   }

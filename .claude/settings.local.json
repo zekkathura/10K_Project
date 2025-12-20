@@ -161,7 +161,21 @@
       "Bash(wsl -d Ubuntu -e bash -c \"grep EXPO_TOKEN ~/.profile 2>/dev/null || echo ''EXPO_TOKEN not found in profile''\")",
       "Bash(dir \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\*.apk\")",
       "Bash(if not exist \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\" mkdir \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\")",
-      "Bash(npx expo install --check)"
+      "Bash(npx expo install --check)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ntest1.3: Fix Android adaptive icon for all launcher shapes\n\n- Add proper adaptive icon foreground \\(white content on transparent\\)\n- Set red background color \\(#E53935\\) in app.config.js\n- Add generate-adaptive-icon.js script for regenerating icons\n- Add 10k_logo_whiteOnly.png source asset\n- Icon now displays correctly in circles, squares, and squircles\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(tasklist:*)",
+      "Bash(cd:*)",
+      "Bash(cmd.exe /c \"taskkill /F /PID 87128\")",
+      "Bash(cmd.exe /c \"taskkill /F /PID 102408\")",
+      "Bash(del \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\.env.local\")",
+      "Bash(cmd.exe /c \"del c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\.env.local\")",
+      "Bash(cmd.exe /c \"tasklist | findstr node\")",
+      "Bash(cmd.exe /c \"type C:\\\\Users\\\\blink\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-blink-Documents-10K-10k-scorekeeper\\\\tasks\\\\b03598a.output\")",
+      "Bash(cmd.exe /c \"npx expo start --port 8081\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :8081\")",
+      "Bash(del \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\src\\\\components\\\\DiceAnimationShowcase.tsx\")",
+      "Bash(cmd.exe:*)",
+      "Bash(timeout /t 3 /nobreak)"
     ],
     "deny": [],
     "ask": []

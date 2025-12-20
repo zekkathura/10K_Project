@@ -8,9 +8,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
-import * as WebBrowser from 'expo-web-browser';
-import { ThemeProvider, useTheme, useThemedStyles, Theme } from './lib/theme';
+import { ThemeProvider, useThemedStyles, Theme } from './lib/theme';
 import { logger } from './lib/logger';
+import { AUTH_STORAGE_KEYS, AUTH_TIMEOUTS, AUTH_ERROR_CODES } from './lib/authConfig';
+import { ProfileCheckResult } from './lib/authTypes';
+import { raceWithTimeout, sleep } from './lib/asyncUtils';
 
 // Error Boundary to catch crashes and display error screen instead of closing
 interface ErrorBoundaryProps {
@@ -110,10 +112,6 @@ const errorStyles = StyleSheet.create({
   },
 });
 
-const REMEMBER_ME_KEY = '10k-remember-me';
-
-type ProfileCheckResult = 'ok' | 'needs_setup' | 'error';
-
 // Profile Setup Modal Component (uses theme)
 interface ProfileSetupModalProps {
   visible: boolean;
@@ -188,7 +186,7 @@ function ProfileSetupModal({
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false - show login immediately, check auth in background
   const [pendingGameCode, setPendingGameCode] = useState<string | null>(null);
 
   // Profile setup state
@@ -207,6 +205,8 @@ export default function App() {
   );
   // Track if we've already handled a fresh sign-in in this session (prevents re-processing)
   const handledFreshSignInRef = useRef(false);
+  // Track if onAuthStateChange is currently processing (prevents race with getSession)
+  const processingAuthChangeRef = useRef(false);
 
   useEffect(() => {
     // Check if profile exists for authenticated user
@@ -216,55 +216,46 @@ export default function App() {
       try {
         logger.debug('checkProfile called for user:', user.id, 'retry:', retryCount);
 
-        // On mobile OAuth, the session might not be fully ready immediately
-        // Force a session refresh to ensure auth headers are set correctly
-        if (retryCount === 0 && Platform.OS !== 'web') {
-          logger.debug('Mobile platform - ensuring session is ready');
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (!sessionData?.session) {
-            logger.debug('Session not ready yet, waiting...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
+        // Check if profile exists (with timeout)
+        const profilePromise = (async () => {
+          const result = await supabase
+            .from('profiles')
+            .select('id, email')
+            .eq('id', user.id)
+            .maybeSingle();
+          return result as { data: { id: string; email: string } | null; error: any };
+        })();
 
-        // Longer timeout for mobile networks
-        const timeoutPromise = new Promise<{ data: null; error: null; timedOut: true }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: null, timedOut: true }), 10000)
-        );
-
-        // Check if profile exists
-        const profilePromise = supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('id', user.id)
-          .maybeSingle()
-          .then(result => ({ ...result, timedOut: false }));
-
-        const result = await Promise.race([profilePromise, timeoutPromise]);
+        const result = await raceWithTimeout(profilePromise, AUTH_TIMEOUTS.PROFILE_CHECK);
 
         if (result.timedOut) {
-          logger.error('Profile check timed out');
-          return 'error'; // Can't determine profile status, sign out and retry
+          logger.warn('Profile check timed out - assuming new user, will show setup');
+          // Don't sign out on timeout - show profile setup instead
+          // The modal handles both new and existing profiles
+          return 'needs_setup';
         }
 
-        logger.debug('Profile check result:', { hasProfile: !!result.data, hasError: !!result.error });
+        const { data, error } = result.data;
+        logger.debug('Profile check result:', { hasProfile: !!data, hasError: !!error });
 
-        if (result.error) {
-          logger.error('Profile check error:', result.error);
+        if (error) {
+          logger.error('Profile check error:', error);
 
-          // If we get a permission error (42501), the session might not be ready yet
+          // If we get a permission error, the session might not be ready yet
           // Retry once after a delay (mobile OAuth race condition)
-          if (result.error.code === '42501' && retryCount < 2) {
+          if (error.code === AUTH_ERROR_CODES.PERMISSION_DENIED && retryCount < 2) {
             logger.debug('Permission error - session may not be ready, retrying after delay...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await sleep(AUTH_TIMEOUTS.RETRY_DELAY);
             return checkProfile(user, retryCount + 1);
           }
 
-          // On error, return error state to trigger sign out
-          return 'error';
+          // On error, show profile setup instead of signing out
+          // This is more user-friendly - let them try to create/update profile
+          logger.warn('Profile check failed - showing setup modal as fallback');
+          return 'needs_setup';
         }
 
-        if (!result.data) {
+        if (!data) {
           logger.debug('No profile found, needs setup');
           return 'needs_setup';
         }
@@ -273,7 +264,8 @@ export default function App() {
         return 'ok';
       } catch (err) {
         logger.error('Error checking profile:', err);
-        return 'error';
+        // Be lenient - show profile setup instead of failing
+        return 'needs_setup';
       }
     };
 
@@ -291,18 +283,10 @@ export default function App() {
       setLoading(false);
     };
 
-    // Timeout fallback - if auth doesn't complete in 15 seconds, show login
-    // This prevents the app from being stuck on loading forever
-    const authTimeout = setTimeout(() => {
-      console.log('[APP_DEBUG] Auth timeout - forcing loading=false');
-      setLoading(false);
-    }, 15000);
-
     // Listen for auth changes first
-    console.log('[APP_DEBUG] Setting up auth listener...');
+    logger.debug('Setting up auth listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('[APP_DEBUG] Auth state changed:', _event, 'hasSession:', !!session);
-      logger.debug('=== Auth state changed ===');
+      logger.debug('Auth state changed:', _event, 'hasSession:', !!session);
       logger.debug('Event:', _event);
       logger.debug('Has session:', !!session);
       logger.debug('User ID:', session?.user?.id || 'none');
@@ -317,30 +301,21 @@ export default function App() {
           handledFreshSignInRef.current = true;
         }
 
+        // Set session immediately so user sees HomeScreen (not stuck on LoginScreen)
+        // Profile check happens in background
+        setSession(session);
+        setLoading(false);
+
         logger.debug('Checking profile for event:', _event);
         const result = await checkProfile(session.user);
         logger.debug('Profile check result:', result);
 
-        if (result === 'error') {
-          logger.error('Profile check failed, signing out');
-          await supabase.auth.signOut();
-          const errorMsg = 'Unable to verify your profile. Please try logging in again.';
-          if (Platform.OS === 'web') {
-            window.alert(errorMsg);
-          } else {
-            Alert.alert('Connection Error', errorMsg);
-          }
-          setSession(null);
-          setLoading(false);
-          return;
-        }
-
         if (result === 'needs_setup') {
           logger.debug('Profile needs setup, showing modal');
           showProfileSetup(session);
-          return;
         }
-        logger.debug('Profile exists, proceeding to home');
+        // result === 'ok' - profile exists, already on home
+        return;
       }
 
       setSession(session);
@@ -348,9 +323,9 @@ export default function App() {
     });
 
     // Get initial session (this will process URL hash on web)
-    console.log('[APP_DEBUG] Calling getSession...');
+    logger.debug('Calling getSession...');
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      console.log('[APP_DEBUG] getSession returned:', 'hasSession:', !!session, 'error:', error?.message || 'none');
+      logger.debug('getSession returned:', 'hasSession:', !!session, 'error:', error?.message || 'none');
       if (error) {
         logger.error('Error getting session', error);
         setSession(null);
@@ -370,7 +345,7 @@ export default function App() {
 
         if (!isFreshOAuthLogin) {
           try {
-            const rememberMeValue = await AsyncStorage.getItem(REMEMBER_ME_KEY);
+            const rememberMeValue = await AsyncStorage.getItem(AUTH_STORAGE_KEYS.REMEMBER_ME);
             logger.debug('getSession: rememberMe value =', rememberMeValue);
             if (rememberMeValue === 'false') {
               logger.debug('Remember me is disabled, clearing restored session');
@@ -404,13 +379,12 @@ export default function App() {
         logger.debug('getSession: Profile exists, proceeding to home');
       }
 
-      console.log('[APP_DEBUG] Setting loading=false, session:', !!session);
+      logger.debug('Setting loading=false, session:', !!session);
       setSession(session);
       setLoading(false);
     });
 
     return () => {
-      clearTimeout(authTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -597,10 +571,10 @@ export default function App() {
       // If the check fails with permission error, session might still be settling
       if (checkError) {
         logger.error('Error checking existing profile:', checkError);
-        if (checkError.code === '42501') {
+        if (checkError.code === AUTH_ERROR_CODES.PERMISSION_DENIED) {
           // Try a short delay and retry once
           logger.debug('Permission error on profile check, waiting for session to settle...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await sleep(AUTH_TIMEOUTS.MOBILE_SESSION_SETTLE);
 
           // Re-verify session
           const { data: retrySession } = await supabase.auth.getSession();
@@ -669,9 +643,9 @@ export default function App() {
         let alertMsg = `Failed to create profile (${errorCode}).`;
 
         // Add helpful hints for common errors
-        if (errorCode === '42501') {
+        if (errorCode === AUTH_ERROR_CODES.PERMISSION_DENIED) {
           alertMsg += ' Permission denied - please try signing out and back in.';
-        } else if (errorCode === '23505') {
+        } else if (errorCode === AUTH_ERROR_CODES.DUPLICATE) {
           alertMsg += ' Profile may already exist.';
         } else if (errorHint) {
           alertMsg += ` ${errorHint}`;

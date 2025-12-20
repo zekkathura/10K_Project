@@ -78,8 +78,8 @@ import { DiceLoader } from '../components';
 
 ### NativeDiceLoader (Mobile Only)
 
-2D animated dice for iOS/Android that shows a tumbling dice with changing faces.
-Uses React Native's Animated API for smooth performance.
+2D animated dice for iOS/Android that simulates the 3D tumbling effect of the web
+DiceLoader. Uses the same 5 roll patterns and follows standard dice rules.
 
 **Location:** `src/components/NativeDiceLoader.tsx`
 
@@ -95,13 +95,15 @@ import { NativeDiceLoader } from '../components';
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `size` | `number` | `60` | Dice size in pixels |
-| `speed` | `number` | `400` | Animation duration per face in ms |
+| `speed` | `number` | `1.5` | Full cycle duration in seconds (matches web) |
 | `color` | `string` | `'#DC2626'` | Dice color (red with white dots) |
 
 **Features:**
-- 2D dice with proper dot patterns (1-6)
-- Rotation + scale animation for tumbling effect
-- Face changes mid-animation for variety
+- 5 different roll patterns matching web (Forward Spiral, Side Sweep, Zigzag, etc.)
+- Varied rotation directions (clockwise and counter-clockwise)
+- Smooth easing with bounce effects and wobble
+- Face sequences follow standard dice rules (opposite faces sum to 7)
+- Random pattern switching after each 6-face cycle
 - Uses native driver for 60fps performance
 
 ---

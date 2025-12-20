@@ -1,8 +1,9 @@
 /**
  * NativeDiceLoader Component (Native Platforms)
  *
- * A 2D animated dice loader for iOS/Android that shows a tumbling dice
- * with changing faces. Uses React Native Animated API for smooth performance.
+ * 2D dice loader with wobble animation.
+ * Dice tilts back and forth with decay, face changes on each cycle.
+ * Uses "Wide Wobble" variant: ±18° rotation, 2 oscillations, 1000ms, with decay.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -11,81 +12,77 @@ import { View, Animated, Easing, StyleSheet } from 'react-native';
 interface NativeDiceLoaderProps {
   /** Dice size in pixels (default: 60) */
   size?: number;
-  /** Animation duration per face in ms (default: 400) */
+  /** Total cycle time in ms (default: 1000) */
   speed?: number;
   /** Dice color (default: red) */
   color?: string;
 }
 
+const DICE_FACES = [1, 2, 3, 4, 5, 6];
+
+// Wobble configuration - "Wide" variant (#4)
+const WOBBLE_CONFIG = {
+  rotation: 18,      // Max rotation in degrees
+  oscillations: 2,   // Number of back-and-forth wobbles
+  decay: true,       // Wobble gets smaller over time
+};
+
 const NativeDiceLoader: React.FC<NativeDiceLoaderProps> = ({
   size = 60,
-  speed = 400,
+  speed = 1000,
   color = '#DC2626'
 }) => {
-  const [currentFace, setCurrentFace] = useState(() => Math.floor(Math.random() * 6) + 1);
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [faceIndex, setFaceIndex] = useState(() => Math.floor(Math.random() * 6));
+  const wobbleAnim = useRef(new Animated.Value(0)).current;
 
-  // Dot patterns for each face (positions in 3x3 grid)
-  const dotPatterns: Record<number, number[]> = {
-    1: [5],
-    2: [1, 9],
-    3: [1, 5, 9],
-    4: [1, 3, 7, 9],
-    5: [1, 3, 5, 7, 9],
-    6: [1, 3, 4, 6, 7, 9],
-  };
+  const currentFace = DICE_FACES[faceIndex];
 
   useEffect(() => {
     const animate = () => {
-      // Reset animation values
-      rotateAnim.setValue(0);
-      scaleAnim.setValue(1);
+      // Change face at start of each wobble cycle
+      setFaceIndex(prev => {
+        let next;
+        do {
+          next = Math.floor(Math.random() * 6);
+        } while (next === prev);
+        return next;
+      });
+      wobbleAnim.setValue(0);
 
-      // Animate: scale down, rotate, change face, scale up
-      Animated.sequence([
-        // Scale down and start rotation
-        Animated.parallel([
-          Animated.timing(scaleAnim, {
-            toValue: 0.8,
-            duration: speed * 0.3,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(rotateAnim, {
-            toValue: 0.5,
-            duration: speed * 0.3,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-        // Continue rotation and scale back up
-        Animated.parallel([
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: speed * 0.4,
-            easing: Easing.out(Easing.bounce),
-            useNativeDriver: true,
-          }),
-          Animated.timing(rotateAnim, {
-            toValue: 1,
-            duration: speed * 0.4,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
+      // Build wobble sequence based on oscillations
+      const wobbleDuration = (speed * 0.4) / (WOBBLE_CONFIG.oscillations * 2 + 1);
+      const sequence: Animated.CompositeAnimation[] = [];
 
-      // Change face mid-animation
-      setTimeout(() => {
-        setCurrentFace(prev => {
-          let next;
-          do {
-            next = Math.floor(Math.random() * 6) + 1;
-          } while (next === prev);
-          return next;
-        });
-      }, speed * 0.35);
+      for (let i = 0; i < WOBBLE_CONFIG.oscillations; i++) {
+        const factor = WOBBLE_CONFIG.decay
+          ? (WOBBLE_CONFIG.oscillations - i) / WOBBLE_CONFIG.oscillations
+          : 1;
+        sequence.push(
+          Animated.timing(wobbleAnim, {
+            toValue: factor,
+            duration: wobbleDuration,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.ease),
+          }),
+          Animated.timing(wobbleAnim, {
+            toValue: -factor,
+            duration: wobbleDuration,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          })
+        );
+      }
+      // Return to center
+      sequence.push(
+        Animated.timing(wobbleAnim, {
+          toValue: 0,
+          duration: wobbleDuration,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        })
+      );
+
+      Animated.sequence(sequence).start();
     };
 
     animate();
@@ -93,50 +90,14 @@ const NativeDiceLoader: React.FC<NativeDiceLoaderProps> = ({
     return () => clearInterval(interval);
   }, [speed]);
 
-  const rotation = rotateAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['0deg', '180deg', '360deg'],
+  // Interpolate wobble value to rotation degrees
+  const rotate = wobbleAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: [`-${WOBBLE_CONFIG.rotation}deg`, '0deg', `${WOBBLE_CONFIG.rotation}deg`],
   });
 
-  const dotSize = size * 0.18;
-  const padding = size * 0.15;
-  const gap = size * 0.05;
   const borderRadius = size * 0.15;
-
-  const renderDots = () => {
-    const visibleDots = dotPatterns[currentFace] || [];
-    const cellSize = (size - padding * 2 - gap * 2) / 3;
-
-    return (
-      <View style={[styles.dotsContainer, { padding, gap }]}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((position) => {
-          const isVisible = visibleDots.includes(position);
-          return (
-            <View
-              key={position}
-              style={[
-                styles.dotCell,
-                { width: cellSize, height: cellSize },
-              ]}
-            >
-              {isVisible && (
-                <View
-                  style={[
-                    styles.dot,
-                    {
-                      width: dotSize,
-                      height: dotSize,
-                      borderRadius: dotSize / 2,
-                    },
-                  ]}
-                />
-              )}
-            </View>
-          );
-        })}
-      </View>
-    );
-  };
+  const dotSize = size * 0.16;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -148,18 +109,91 @@ const NativeDiceLoader: React.FC<NativeDiceLoaderProps> = ({
             height: size,
             borderRadius,
             backgroundColor: color,
-            transform: [
-              { rotate: rotation },
-              { scale: scaleAnim },
-            ],
+            transform: [{ rotate }],
           },
         ]}
       >
-        {renderDots()}
+        <View style={[styles.faceContainer, { width: size, height: size }]}>
+          {renderDotsForFace(currentFace, dotSize, size)}
+        </View>
       </Animated.View>
     </View>
   );
 };
+
+/**
+ * Render dots for a dice face with proper positioning
+ */
+function renderDotsForFace(face: number, dotSize: number, containerSize: number) {
+  const margin = containerSize * 0.18;
+  const center = containerSize / 2;
+
+  const left = margin;
+  const right = containerSize - margin - dotSize;
+  const top = margin;
+  const bottom = containerSize - margin - dotSize;
+  const centerX = center - dotSize / 2;
+  const centerY = center - dotSize / 2;
+  const middleY = center - dotSize / 2;
+
+  const dotStyle = {
+    width: dotSize,
+    height: dotSize,
+    borderRadius: dotSize / 2,
+    backgroundColor: 'white',
+    position: 'absolute' as const,
+  };
+
+  const dots: React.ReactNode[] = [];
+
+  switch (face) {
+    case 1:
+      dots.push(<View key="c" style={[dotStyle, { left: centerX, top: centerY }]} />);
+      break;
+    case 2:
+      dots.push(
+        <View key="tr" style={[dotStyle, { left: right, top: top }]} />,
+        <View key="bl" style={[dotStyle, { left: left, top: bottom }]} />
+      );
+      break;
+    case 3:
+      dots.push(
+        <View key="tr" style={[dotStyle, { left: right, top: top }]} />,
+        <View key="c" style={[dotStyle, { left: centerX, top: centerY }]} />,
+        <View key="bl" style={[dotStyle, { left: left, top: bottom }]} />
+      );
+      break;
+    case 4:
+      dots.push(
+        <View key="tl" style={[dotStyle, { left: left, top: top }]} />,
+        <View key="tr" style={[dotStyle, { left: right, top: top }]} />,
+        <View key="bl" style={[dotStyle, { left: left, top: bottom }]} />,
+        <View key="br" style={[dotStyle, { left: right, top: bottom }]} />
+      );
+      break;
+    case 5:
+      dots.push(
+        <View key="tl" style={[dotStyle, { left: left, top: top }]} />,
+        <View key="tr" style={[dotStyle, { left: right, top: top }]} />,
+        <View key="c" style={[dotStyle, { left: centerX, top: centerY }]} />,
+        <View key="bl" style={[dotStyle, { left: left, top: bottom }]} />,
+        <View key="br" style={[dotStyle, { left: right, top: bottom }]} />
+      );
+      break;
+    case 6:
+      dots.push(
+        <View key="lt" style={[dotStyle, { left: left, top: top }]} />,
+        <View key="lm" style={[dotStyle, { left: left, top: middleY }]} />,
+        <View key="lb" style={[dotStyle, { left: left, top: bottom }]} />,
+        <View key="rt" style={[dotStyle, { left: right, top: top }]} />,
+        <View key="rm" style={[dotStyle, { left: right, top: middleY }]} />,
+        <View key="rb" style={[dotStyle, { left: right, top: bottom }]} />
+      );
+      break;
+  }
+
+  return dots;
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -168,27 +202,13 @@ const styles = StyleSheet.create({
   },
   dice: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowRadius: 5,
     elevation: 8,
   },
-  dotsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dotCell: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dot: {
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-    elevation: 2,
+  faceContainer: {
+    position: 'relative',
   },
 });
 

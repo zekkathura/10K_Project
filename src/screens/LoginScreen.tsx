@@ -19,10 +19,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
 import { signInWithGoogle } from '../lib/auth';
-import { supabase } from '../lib/supabase';  // Used for email auth
+import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
-
-const REMEMBER_ME_KEY = '10k-remember-me';
+import { AUTH_STORAGE_KEYS, APP_SCHEME } from '../lib/authConfig';
 
 // Dice faces for decoration
 const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
@@ -61,6 +60,7 @@ export default function LoginScreen() {
     outputRange: ['-3deg', '3deg'],
   });
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -76,14 +76,14 @@ export default function LoginScreen() {
   const styles = useThemedStyles(createStyles);
 
   useEffect(() => {
-    AsyncStorage.getItem(REMEMBER_ME_KEY).then((value) => {
+    AsyncStorage.getItem(AUTH_STORAGE_KEYS.REMEMBER_ME).then((value) => {
       if (value === 'false') setRememberMe(false);
     });
   }, []);
 
   const persistRememberMe = async (value: boolean) => {
     setRememberMe(value);
-    await AsyncStorage.setItem(REMEMBER_ME_KEY, value ? 'true' : 'false');
+    await AsyncStorage.setItem(AUTH_STORAGE_KEYS.REMEMBER_ME, value ? 'true' : 'false');
   };
 
   const switchMode = (next: 'signin' | 'signup') => {
@@ -112,21 +112,26 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
+    // Don't show any loading - just open browser immediately
     try {
       const result = await signInWithGoogle();
+
       if (!result.success) {
-        showAlert('Error', 'Failed to sign in with Google');
+        const errorMsg = typeof result.error === 'string'
+          ? result.error
+          : 'Failed to sign in with Google';
+        showAlert('Error', errorMsg);
         return;
       }
-      // Profile creation is handled by App.tsx's ProfileSetupModal
-      // This avoids race conditions between LoginScreen and App.tsx
-      logger.debug('Google sign-in successful, App.tsx will handle profile setup');
+
+      // Show full-screen loader - onAuthStateChange in App.tsx will handle navigation
+      setLoading(true);
+      setLoadingMessage('');
+      logger.debug('Google sign-in successful, waiting for session...');
+      // onAuthStateChange will fire and navigate to HomeScreen
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred');
       logger.error('Google sign-in error', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -141,6 +146,7 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
+    setLoadingMessage('Signing in...');
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
@@ -151,6 +157,7 @@ export default function LoginScreen() {
       showAlert('Error', error.message || 'Failed to sign in.');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -179,10 +186,10 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
+    setLoadingMessage('Creating account...');
     try {
       const redirectTo = AuthSession.makeRedirectUri({
-        scheme: 'com.10kscorekeeper',
-        useProxy: true,
+        scheme: APP_SCHEME,
       });
       const { data, error } = await supabase.auth.signUp({
         email: trimmedEmail,
@@ -216,6 +223,7 @@ export default function LoginScreen() {
       showAlert('Error', error.message || 'Failed to sign up.');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -232,8 +240,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const redirectTo = AuthSession.makeRedirectUri({
-        scheme: 'com.10kscorekeeper',
-        useProxy: true,
+        scheme: APP_SCHEME,
       });
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
         redirectTo,
@@ -254,6 +261,15 @@ export default function LoginScreen() {
       handleSignUp();
     }
   };
+
+  // Show full-screen loader when returning from OAuth
+  if (loading && !loadingMessage) {
+    return (
+      <View style={styles.fullScreenLoader}>
+        <ThemedLoader mode="fullscreen" message="Signing in..." />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
@@ -462,7 +478,12 @@ export default function LoginScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ disabled: loading }}
               >
-                {loading ? (
+                {loading && loadingMessage && !loadingMessage.includes('Google') ? (
+                  <View style={styles.loadingRow}>
+                    <ThemedLoader mode="inline" color={styles.primaryButtonText.color} />
+                    <Text style={styles.primaryButtonTextLoading}>{loadingMessage}</Text>
+                  </View>
+                ) : loading ? (
                   <ThemedLoader mode="inline" color={styles.primaryButtonText.color} />
                 ) : (
                   <Text style={styles.primaryButtonText}>
@@ -486,19 +507,13 @@ export default function LoginScreen() {
               accessibilityRole="button"
               accessibilityState={{ disabled: loading }}
             >
-              {loading ? (
-                <ThemedLoader mode="inline" color={styles.googleButtonText.color} />
-              ) : (
-                <>
-                  <Image
-                    source={require('../../assets/images/google_logo.png')}
-                    style={styles.buttonLogo}
-                    resizeMode="contain"
-                    accessibilityElementsHidden={true}
-                  />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </>
-              )}
+              <Image
+                source={require('../../assets/images/google_logo.png')}
+                style={styles.buttonLogo}
+                resizeMode="contain"
+                accessibilityElementsHidden={true}
+              />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -523,6 +538,12 @@ export default function LoginScreen() {
 const createStyles = ({ colors, mode }: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: colors.background },
+    fullScreenLoader: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
     fixedHeader: {
       backgroundColor: colors.background,
       borderBottomWidth: 1,
@@ -734,6 +755,11 @@ const createStyles = ({ colors, mode }: Theme) =>
       fontWeight: '700',
       letterSpacing: 1,
     },
+    primaryButtonTextLoading: {
+      color: colors.buttonText,
+      fontSize: 13,
+      fontWeight: '500',
+    },
     separatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -771,6 +797,16 @@ const createStyles = ({ colors, mode }: Theme) =>
       color: colors.textPrimary,
       fontSize: 13,
       fontWeight: '600',
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    loadingMessageText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '500',
     },
     eyeButton: {
       paddingHorizontal: 6,

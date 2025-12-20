@@ -44,6 +44,13 @@ When debugging auth/permission issues or after policy changes:
 - `src/lib/versionCheck.ts` – app version checking against backend requirements
 - `src/screens/GameScreen.tsx` – main game logic, realtime sync
 
+**Auth Utilities** (centralized authentication logic):
+- `src/lib/authConfig.ts` – constants: `APP_SCHEME`, `AUTH_TIMEOUTS`, `AUTH_STORAGE_KEYS`, `AUTH_ERROR_CODES`
+- `src/lib/authTypes.ts` – type-safe: `AuthResult<T>`, `AuthError`, `ProfileCheckResult`
+- `src/lib/asyncUtils.ts` – utilities: `sleep`, `withRetry`, `withTimeout`, `raceWithTimeout`
+- `src/lib/useAuth.ts` – comprehensive auth hook (future use)
+- `src/lib/auth.ts` – low-level OAuth functions (Google, Apple)
+
 ## Guest Players & Data Migration
 
 **Workflow for pre-seeding historical game data:**
@@ -96,6 +103,7 @@ When debugging auth/permission issues or after policy changes:
 - ✅ OAuth redirect: Standalone builds use explicit `com.10kscorekeeper://` scheme (not `AuthSession.makeRedirectUri()`)
 - ✅ Profile creation: Removed duplicate logic from LoginScreen - App.tsx's ProfileSetupModal handles all OAuth profile creation
 - ✅ HomeScreen header: Changed from fixed `height` to `minHeight` to accommodate safe area insets on phones with notches
+- ✅ Auth refactoring: Centralized auth constants, added timeout utilities, removed session polling workaround from LoginScreen
 
 ## Environments
 
