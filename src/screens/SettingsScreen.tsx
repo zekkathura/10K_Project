@@ -6,14 +6,19 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import { deleteAccount } from '../lib/database';
+import { logger } from '../lib/logger';
 import type { Profile } from '../lib/types';
 import { ThemeMode, useTheme, useThemedStyles } from '../lib/theme';
+
+// Privacy Policy URL - Update this when you host your privacy policy
+const PRIVACY_POLICY_URL = 'https://10kscorekeeper.com/privacy';
 
 interface SettingsScreenProps {
   navigation: { goBack: () => void };
@@ -93,7 +98,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
         setMode(storedMode);
       }
     } catch (error: any) {
-      console.error('Error loading profile:', error);
+      logger.error('Error loading profile:', error);
       alert.show({
         title: 'Error',
         message: 'Failed to load profile. Signing out...',
@@ -313,6 +318,20 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           </View>
         </View>
 
+        {/* Legal Section */}
+        <Text style={styles.sectionHeader}>Legal</Text>
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            accessibilityLabel="Privacy Policy"
+            accessibilityRole="link"
+          >
+            <Text style={styles.linkText}>Privacy Policy</Text>
+            <Text style={styles.linkArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Sign Out / Delete Account */}
         {onSignOut && (
           <View style={styles.section}>
@@ -491,6 +510,21 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
     },
     aboutValue: {
       fontSize: 16,
+      color: colors.textSecondary,
+    },
+    // Legal section links
+    linkRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    linkText: {
+      fontSize: 16,
+      color: colors.accent,
+    },
+    linkArrow: {
+      fontSize: 20,
       color: colors.textSecondary,
     },
     // Danger zone buttons

@@ -29,6 +29,7 @@ import {
 } from '../lib/database';
 import { GamePlayer, Turn, Game } from '../lib/types';
 import { Theme, useTheme } from '../lib/theme';
+import { logger } from '../lib/logger';
 import GameSettingsModal from './GameSettingsModal';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -159,7 +160,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         userId: currentUserId,
       });
     } catch (error) {
-      console.error('Error loading game data', error);
+      logger.error('Error loading game data', error);
       alert.show({ title: 'Error', message: 'Failed to load game data' });
     } finally {
       setLoading(false);
@@ -174,12 +175,12 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       if (status === 'ok') return true;
       const fallback = await channel.httpSend('game_refresh', { reason, ...extra });
       if (!fallback.success) {
-        console.warn('Realtime game refresh httpSend failed', fallback);
+        logger.warn('Realtime game refresh httpSend failed', fallback);
         return false;
       }
       return true;
     } catch (err) {
-      console.warn('Failed to broadcast game refresh', err);
+      logger.warn('Failed to broadcast game refresh', err);
       return false;
     }
   };
@@ -269,7 +270,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                 await loadAll();
                 pushGameRefresh('score_change');
               } catch (err) {
-                console.error(err);
+                logger.error('Failed to delete score', err);
                 alert.show({ title: 'Error', message: 'Failed to delete score' });
               }
             },
@@ -310,7 +311,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         await loadAll();
         pushGameRefresh('score_change');
       } catch (err) {
-        console.error(err);
+        logger.error('Failed to reset score', err);
         alert.show({ title: 'Error', message: 'Failed to reset score' });
       }
       return;
@@ -338,7 +339,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       pushGameRefresh('score_change');
     } catch (err) {
-      console.error(err);
+      logger.error('Failed to save score', err);
       alert.show({ title: 'Error', message: 'Failed to save score' });
     }
   };
@@ -358,7 +359,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               await loadAll();
               pushGameRefresh('score_change');
             } catch (err) {
-              console.error(err);
+              logger.error('Failed to delete round', err);
               alert.show({ title: 'Error', message: 'Failed to delete round' });
             }
           },
@@ -373,7 +374,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       pushGameRefresh('player_change');
     } catch (error) {
-      console.error('Error removing player', error);
+      logger.error('Error removing player', error);
       alert.show({ title: 'Error', message: 'Failed to remove player' });
     }
   };
@@ -384,7 +385,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       pushGameRefresh('player_change');
     } catch (error) {
-      console.error('Error updating player order', error);
+      logger.error('Error updating player order', error);
       alert.show({ title: 'Error', message: 'Failed to update player order' });
     }
   };
@@ -422,7 +423,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await updateGameRounds(gameId, clamped);
       setTotalRows(clamped);
     } catch (err) {
-      console.error('Failed to update rounds', err);
+      logger.error('Failed to update rounds', err);
       alert.show({ title: 'Error', message: 'Could not update rounds. Please try again.' });
       return false;
     }
@@ -444,7 +445,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       pushGameRefresh('player_change');
     } catch (error: any) {
-      console.error('Error adding player', error);
+      logger.error('Error adding player', error);
       alert.show({ title: 'Error', message: error.message || 'Failed to add player' });
     }
   };
@@ -471,7 +472,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setRenameInput('');
       pushGameRefresh('player_change');
     } catch (error) {
-      console.error('Error renaming player', error);
+      logger.error('Error renaming player', error);
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to rename player' });
     }
   };
@@ -524,7 +525,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         realtimeChannelRef.current = dataChannel;
         dataChannel.subscribe((status) => {
           if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            console.warn('Realtime data subscribe status:', status);
+            logger.warn('Realtime data subscribe status:', status);
           }
         });
 
@@ -541,11 +542,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         broadcastChannelRef.current = broadcastChannel;
         broadcastChannel.subscribe((status) => {
           if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            console.warn('Realtime broadcast subscribe status:', status);
+            logger.warn('Realtime broadcast subscribe status:', status);
           }
         });
       } catch (err) {
-        console.warn('Realtime subscribe failed', err);
+        logger.warn('Realtime subscribe failed', err);
       }
     };
 
@@ -556,12 +557,12 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         try {
           await channel.unsubscribe();
         } catch (err) {
-          console.warn(`Realtime unsubscribe failed (${label})`, err);
+          logger.warn(`Realtime unsubscribe failed (${label})`, err);
         }
         try {
           supabase.removeChannel(channel);
         } catch (err) {
-          console.warn(`Realtime removeChannel failed (${label})`, err);
+          logger.warn(`Realtime removeChannel failed (${label})`, err);
         }
       };
 
@@ -573,7 +574,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   }, [gameId]);
 
   const handleDeleteGame = async () => {
-    console.log('Delete game clicked for gameId:', gameId);
+    logger.debug('Delete game clicked for gameId:', gameId);
     try {
       await deleteGame(gameId);
       pushGameRefresh('game_deleted');
@@ -582,7 +583,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       onGameRemoved?.();
       onBack();
     } catch (error) {
-      console.error('Error deleting game', error);
+      logger.error('Error deleting game', error);
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to delete game' });
     }
   };
@@ -594,7 +595,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setShowSettingsModal(false);
       alert.show({ title: 'Game Re-opened', message: 'You can now make changes and finish the game again.' });
     } catch (error) {
-      console.error('Error reopening game', error);
+      logger.error('Error reopening game', error);
       const message = error instanceof Error ? error.message : 'Failed to re-open game';
       alert.show({ title: 'Error', message });
     }
@@ -637,7 +638,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   };
 
   const handleFinishGame = async () => {
-    console.log('Finish game clicked for gameId:', gameId);
+    logger.debug('Finish game clicked for gameId:', gameId);
     if (eligibleWinners.length === 0) {
       alert.show({ title: 'No winner', message: 'No player has reached 10,000 points yet.' });
       return;
@@ -657,7 +658,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       onGameRemoved?.();
       onBack();
     } catch (error) {
-      console.error('Error finishing game', error);
+      logger.error('Error finishing game', error);
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to finish game' });
     } finally {
       setFinishing(false);
@@ -934,7 +935,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     deleteTurn(selectedTurn.id, selectedTurn.player_id, selectedTurn.score, selectedTurn.is_bust)
                       .then(loadAll)
                       .catch((err) => {
-                        console.error(err);
+                        logger.error('Failed to reset score', err);
                         alert.show({ title: 'Error', message: 'Failed to reset score' });
                       });
                   }

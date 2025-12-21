@@ -9,7 +9,7 @@
 # - Sign out button presence
 # - Closing settings modal
 
-appId: com.tenk.scorekeeper.previewdev
+appId: com.tenk.scorekeeper.dev
 ---
 - launchApp:
     clearState: true
@@ -25,32 +25,27 @@ appId: com.tenk.scorekeeper.previewdev
 - tapOn:
     text: "Settings"
 
-# Wait for settings modal
+# Wait for settings modal - header shows "Settings"
 - extendedWaitUntil:
-    visible: "Menu"
+    visible: "Settings"
     timeout: 5000
 
-# Verify settings screen elements
-- assertVisible: "General"
+# Verify settings screen elements (actual section headers from SettingsScreen.tsx)
+- assertVisible: "Appearance"
 - assertVisible: "Theme"
-- assertVisible: "Email"
+- assertVisible: "Account"
 - assertVisible: "Display Name"
 - assertVisible: "Sign Out"
 - takeScreenshot: "03-settings-screen"
 
-# Test theme toggle - tap on Theme row
-- tapOn: "Theme"
+# Theme uses radio buttons - Light and Dark are visible directly (no dropdown)
+# Just verify they're visible and tap to change
+- assertVisible: "Light"
+- assertVisible: "Dark"
+- takeScreenshot: "03-theme-options"
 
-# Theme dropdown should show Light/Dark options
-- extendedWaitUntil:
-    visible: "Light mode"
-    timeout: 3000
-
-- assertVisible: "Dark mode"
-- takeScreenshot: "03-theme-dropdown"
-
-# Select opposite theme (tap Dark mode if light, or vice versa)
-- tapOn: "Dark mode"
+# Select Dark theme
+- tapOn: "Dark"
 
 # Wait for theme to apply
 - scroll
@@ -71,16 +66,11 @@ appId: com.tenk.scorekeeper.previewdev
     text: "Settings"
 
 - extendedWaitUntil:
-    visible: "Menu"
+    visible: "Appearance"
     timeout: 5000
 
-- tapOn: "Theme"
-
-- extendedWaitUntil:
-    visible: "Light mode"
-    timeout: 3000
-
-- tapOn: "Light mode"
+# Tap Light to restore original theme
+- tapOn: "Light"
 - scroll
 
 # Close settings

@@ -78,6 +78,18 @@ export async function joinGameByCode(joinCode: string, userId: string, playerNam
   if (gameError) throw gameError;
   if (!game) throw new Error('Game not found or has ended');
 
+  // Check if user is already in this game
+  const { data: existingPlayer } = await supabase
+    .from('game_players')
+    .select('id')
+    .eq('game_id', game.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existingPlayer) {
+    throw new Error('You are already in this game');
+  }
+
   // Add player to game
   const { data: existingPlayers } = await supabase
     .from('game_players')

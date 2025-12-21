@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from './logger';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -158,7 +159,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           setModeState(stored);
         }
       } catch (error) {
-        console.warn('Failed to load theme mode', error);
+        logger.warn('Failed to load theme mode', error);
       }
     };
     loadMode();
@@ -169,7 +170,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setModeState(nextMode);
       await AsyncStorage.setItem(STORAGE_KEY, nextMode);
     } catch (error) {
-      console.warn('Failed to persist theme mode', error);
+      logger.warn('Failed to persist theme mode', error);
     }
   };
 

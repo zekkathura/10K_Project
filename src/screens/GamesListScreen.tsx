@@ -13,6 +13,7 @@ import {
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
 import { getMyGames, joinGameByCode } from '../lib/database';
+import { logger } from '../lib/logger';
 import { Game } from '../lib/types';
 import CreateGameScreen from './CreateGameScreen';
 import { Theme, useThemedStyles } from '../lib/theme';
@@ -181,7 +182,7 @@ export default function GamesListScreen({
         }
       }
     } catch (error) {
-      console.error('Error loading games:', error);
+      logger.error('Error loading games:', error);
     } finally {
       // Ensure loading shows for at least one full wobble cycle
       const elapsed = Date.now() - loadStartTime;

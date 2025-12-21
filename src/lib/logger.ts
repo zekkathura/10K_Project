@@ -2,16 +2,21 @@
  * Secure Logger Utility
  *
  * Replaces console.log throughout the app to:
- * 1. Only log in development mode (never in production builds)
+ * 1. Only log in development mode OR when enabled via backend app_config
  * 2. Sanitize PII (emails, user IDs, tokens) from logs
  * 3. Provide consistent log formatting
  *
+ * Backend Control:
+ *   Set `debug_logging_enabled = 'true'` in Supabase app_config table
+ *   to enable debug logging in production builds (for troubleshooting).
+ *   This is secure because users cannot modify the backend setting.
+ *
  * Usage:
  *   import { logger } from '@/lib/logger';
- *   logger.debug('Loading game', { gameId });       // Dev only
- *   logger.info('Game started');                    // Dev only
- *   logger.warn('Rate limit approaching');          // Dev only
- *   logger.error('Failed to save', error);          // Always logs (without stack in prod)
+ *   logger.debug('Loading game', { gameId });       // Dev or backend-enabled
+ *   logger.info('Game started');                    // Dev or backend-enabled
+ *   logger.warn('Rate limit approaching');          // Dev or backend-enabled
+ *   logger.error('Failed to save', error);          // Always logs (sanitized in prod)
  */
 
 // Check if we're in development mode
@@ -24,6 +29,39 @@ try {
     : process.env.NODE_ENV === 'development';
 } catch {
   isDev = false;
+}
+
+// Backend-controlled debug flag (fetched from app_config)
+// This allows enabling debug logs in production without a new build
+let remoteDebugEnabled = false;
+
+/**
+ * Initialize remote debug setting from app_config
+ * Call this during app startup (after Supabase is ready)
+ */
+export async function initializeRemoteDebug(supabaseClient: any): Promise<void> {
+  try {
+    const { data, error } = await supabaseClient
+      .from('app_config')
+      .select('value')
+      .eq('key', 'debug_logging_enabled')
+      .maybeSingle();
+
+    if (!error && data?.value === 'true') {
+      remoteDebugEnabled = true;
+      // Use console.log directly here since logger isn't fully initialized
+      console.log('[LOGGER] Remote debug logging enabled via app_config');
+    }
+  } catch {
+    // Silently fail - debug logging just stays disabled
+  }
+}
+
+/**
+ * Check if debug logging is enabled (dev mode OR backend flag)
+ */
+function isDebugEnabled(): boolean {
+  return isDev || remoteDebugEnabled;
 }
 
 // PII patterns to sanitize
@@ -122,31 +160,31 @@ function formatArgs(args: unknown[]): string[] {
  */
 export const logger = {
   /**
-   * Debug logging - only in development
+   * Debug logging - only in development or when backend-enabled
    * Use for detailed debugging information
    */
   debug: (...args: unknown[]): void => {
-    if (isDev) {
+    if (isDebugEnabled()) {
       console.log('[DEBUG]', ...formatArgs(args));
     }
   },
 
   /**
-   * Info logging - only in development
+   * Info logging - only in development or when backend-enabled
    * Use for general information about app flow
    */
   info: (...args: unknown[]): void => {
-    if (isDev) {
+    if (isDebugEnabled()) {
       console.log('[INFO]', ...formatArgs(args));
     }
   },
 
   /**
-   * Warning logging - only in development
+   * Warning logging - only in development or when backend-enabled
    * Use for potential issues that don't break functionality
    */
   warn: (...args: unknown[]): void => {
-    if (isDev) {
+    if (isDebugEnabled()) {
       console.warn('[WARN]', ...formatArgs(args));
     }
   },
@@ -154,19 +192,21 @@ export const logger = {
   /**
    * Error logging - always logs (but sanitized)
    * Use for errors that need attention
+   * In debug mode: logs full sanitized error details
+   * In production: logs only sanitized message (no stack traces)
    */
   error: (message: string, error?: unknown): void => {
     // Always log errors, but sanitize in production
     const sanitizedMessage = sanitizeString(message);
 
-    if (isDev) {
+    if (isDebugEnabled()) {
       const sanitizedError = error ? sanitizeObject(error) : '';
       const errorStr = typeof sanitizedError === 'object' && sanitizedError !== null
         ? JSON.stringify(sanitizedError)
         : String(sanitizedError);
       console.error('[ERROR]', sanitizedMessage, errorStr);
     } else {
-      // In production, only log the message (not the full error object)
+      // In production (without debug enabled), only log the message (not the full error object)
       console.error('[ERROR]', sanitizedMessage);
     }
   },

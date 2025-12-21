@@ -2,14 +2,17 @@
 
 Use when building Android APKs locally via WSL (no EAS cloud quota limits).
 
-## Pre-built APKs (Use First!)
+## Pre-built Files (Use First!)
 
-**Check `build/` directory before rebuilding.** These APKs already exist:
+**Check `build/` directory before rebuilding.** These files should exist:
 
-| File | Profile | Database | Dev Server |
-|------|---------|----------|------------|
-| `build/10k-preview-dev.apk` | preview-dev | 10k-dev | Not required (standalone) |
-| `build/10k-dev.apk` | development | 10k-dev | Required (dev client) |
+| File | Profile | Database | Format | Use Case |
+|------|---------|----------|--------|----------|
+| `build/10k-dev.apk` | development | 10k-dev | APK | Dev client (requires Metro) |
+| `build/10k-preview-dev.apk` | preview-dev | 10k-dev | APK | E2E testing (standalone) |
+| `build/10k-production.aab` | production | 10k-prod | AAB | Google Play Store upload |
+
+**Note:** Production builds create an `.aab` (Android App Bundle), not `.apk`. Google Play requires AAB format. You cannot install an AAB directly on a device.
 
 **Quick install existing APK:**
 ```bash
@@ -76,12 +79,69 @@ eas build --profile preview --platform android --local --output ./build/10k-prev
 eas build --profile production --platform android --local --output ./build/10k-production.aab
 ```
 
+## Production Build (First Time - Keystore Setup)
+
+The first production build requires **interactive keystore generation**. This must be run by the user in WSL terminal (Claude Code cannot run this non-interactively).
+
+### First-Time Production Build
+
+```bash
+# Open WSL terminal and run:
+cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
+eas build --profile production --platform android --local --output ./build/10k-production.aab
+```
+
+**When prompted:** "Generate a new Android Keystore?" → Press **Y**
+
+The keystore will be:
+- Saved locally in `credentials.json` (gitignored)
+- Backed up to EAS servers for future cloud builds
+- Required for ALL future updates to this app on Google Play
+
+### Subsequent Production Builds
+
+After the keystore exists, production builds work the same as other profiles:
+```bash
+cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
+eas build --profile production --platform android --local --output ./build/10k-production.aab
+```
+
+### Important Notes
+
+- **Keep `credentials.json` safe** - Contains your signing keystore. Back it up securely.
+- **Same keystore required forever** - Google Play requires the same signing key for all app updates
+- **AAB format** - Production builds create `.aab` (Android App Bundle), not `.apk`
+- **Cannot install AAB directly** - AAB is for Google Play upload only; use preview builds for device testing
+
 ## Output Locations
 
-APKs are output to the `build/` directory:
-- `build/10k-preview-dev.apk` - Testing APK (10k-dev)
-- `build/10k-preview.apk` - Internal testing APK (10k-prod)
-- `build/10k-production.aab` - Google Play bundle
+Build files are output to the `build/` directory:
+- `build/10k-dev.apk` - Development client APK (requires Metro server)
+- `build/10k-preview-dev.apk` - Standalone testing APK (10k-dev database)
+- `build/10k-production.aab` - Google Play bundle (10k-prod database)
+
+### Finding Build Files (Claude Code)
+
+**Use Glob tool** to reliably find build files (avoids Windows path escaping issues):
+```
+# Find APKs
+Glob pattern: build/**/*.apk
+Path: c:\Users\blink\Documents\10K\10k-scorekeeper
+
+# Find AAB (production)
+Glob pattern: build/**/*.aab
+Path: c:\Users\blink\Documents\10K\10k-scorekeeper
+```
+
+**Don't use** `dir` or `ls` commands for build files - path escaping between bash/cmd/PowerShell is unreliable.
+
+### Paths by Context
+
+| Context | Path Format |
+|---------|-------------|
+| Windows/Claude | `c:\Users\blink\Documents\10K\10k-scorekeeper\build\` |
+| WSL | `/mnt/c/Users/blink/Documents/10K/10k-scorekeeper/build/` |
+| ADB install | `build/10k-preview-dev.apk` (relative from project root) |
 
 ## Installing APK on Device
 
@@ -166,3 +226,7 @@ wsl -d Ubuntu -- bash -c "yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanage
 4. **Set clean minimal PATH** - Only include essential Linux paths + Android SDK paths to avoid Windows path pollution.
 
 5. **First build is slow** - Downloads Gradle (~200MB), NDK, CMake. Subsequent builds use cache (3-5 min).
+
+6. **Use Glob tool for finding files** - `dir` and `ls` commands have path escaping issues on Windows. Use the Glob tool with pattern `build/**/*.apk` to reliably find APK files.
+
+7. **Production builds need keystore** - First production build requires interactive keystore generation (user must run in WSL terminal). Subsequent builds work normally. Back up `credentials.json` securely.

@@ -2,6 +2,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert, Platform } from 'react-native';
 import { GamePlayer } from '../lib/types';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
+import { logger } from '../lib/logger';
 
 interface GameSettingsModalProps {
   visible: boolean;
@@ -201,14 +202,14 @@ export default function GameSettingsModal({
                 onPress={() =>
                   Platform.OS === 'web'
                     ? (() => {
-                        console.log('Delete Game clicked (web)');
+                        logger.debug('Delete Game clicked (web)');
                         if (window.confirm('Are you sure you want to delete this game?')) {
                           onDeleteGame();
                         }
                       })()
                     : showAlert('Delete game', 'Are you sure you want to delete this game?', [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: () => { console.log('Delete Game confirmed'); onDeleteGame(); } },
+                        { text: 'Delete', style: 'destructive', onPress: () => { logger.debug('Delete Game confirmed'); onDeleteGame(); } },
                       ])
                 }
               >
@@ -239,14 +240,14 @@ export default function GameSettingsModal({
                 onPress={() =>
                   Platform.OS === 'web'
                     ? (() => {
-                        console.log('Delete Game clicked (web)');
+                        logger.debug('Delete Game clicked (web)');
                         if (window.confirm('Are you sure you want to delete this game?')) {
                           onDeleteGame();
                         }
                       })()
                     : showAlert('Delete game', 'Are you sure you want to delete this game?', [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: () => { console.log('Delete Game confirmed'); onDeleteGame(); } },
+                        { text: 'Delete', style: 'destructive', onPress: () => { logger.debug('Delete Game confirmed'); onDeleteGame(); } },
                       ])
                 }
               >

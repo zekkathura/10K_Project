@@ -8,17 +8,19 @@
 # - Email/password login succeeds
 # - Home screen with navigation tabs appears
 
-appId: com.tenk.scorekeeper.previewdev
+appId: com.tenk.scorekeeper.dev
 ---
 - launchApp:
     clearState: true
 
-# Verify login screen loads
+# Verify login screen loads (dev build may take time to load JS bundle)
 - extendedWaitUntil:
     visible: "LOG IN"
-    timeout: 10000
+    timeout: 30000
 
-- assertVisible: "you@example.com"
+# Verify key elements visible (using labels that ARE in accessibility tree)
+- assertVisible: "EMAIL"
+- assertVisible: "PASSWORD"
 - assertVisible: "Continue with Google"
 - takeScreenshot: "01-login-screen"
 

@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 /**
  * Supabase Client Configuration
@@ -53,7 +54,7 @@ try {
     },
   });
 } catch (error) {
-  console.error('Failed to initialize Supabase client:', error);
+  logger.error('Failed to initialize Supabase client', error);
   // Create a minimal client that will fail gracefully
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {

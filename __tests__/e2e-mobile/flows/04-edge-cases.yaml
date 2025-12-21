@@ -8,7 +8,7 @@
 # - Google OAuth button (verifies it opens browser)
 # - Cancel buttons work correctly
 
-appId: com.tenk.scorekeeper.previewdev
+appId: com.tenk.scorekeeper.dev
 ---
 - launchApp:
     clearState: true

@@ -17,7 +17,7 @@ Expo SDK 54 (React Native Web) + TypeScript + Supabase (Postgres/Auth/Realtime)
 - `games` (join codes, rounds, winner tracking, status)
 - `game_players` (user + guest players per game)
 - `turns` (scores, busts, per round)
-- `app_config` (version requirements, maintenance mode)
+- `app_config` (version requirements, maintenance mode, debug logging control)
 
 **Why We Maintain Verification Scripts:**
 AI assistants lack direct database access. To prevent recommending changes incompatible with actual backend structure, we maintain reference files (`.claude/*.md`) that mirror live database state. User runs verification scripts in Supabase and shares output to keep AI synchronized with reality.
@@ -41,6 +41,7 @@ When debugging auth/permission issues or after policy changes:
 - `src/lib/database.ts` – all DB operations (prefer these functions over raw Supabase queries)
 - `src/lib/validation.ts` – input validators (always use before DB ops)
 - `src/lib/theme.ts` – dark/light theme system
+- `src/lib/logger.ts` – secure logging with PII sanitization and backend-controlled debug mode
 - `src/lib/versionCheck.ts` – app version checking against backend requirements
 - `src/screens/GameScreen.tsx` – main game logic, realtime sync
 
@@ -113,6 +114,8 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Guest validation: Guest player names validated with `validatePlayerName()` before DB insertion
 - ✅ ThemedAlert: Cross-platform modal alert component for consistent dark/light mode
 - ✅ Delete account: `deleteAccount()` function anonymizes game history, deletes profile
+- ✅ Privacy Policy: Added link in Settings screen (Legal section)
+- ✅ Secure logging: All console.log/error replaced with `logger` (PII sanitization, backend-controlled debug)
 
 ## Environments
 
@@ -151,8 +154,9 @@ When debugging auth/permission issues or after policy changes:
 eas build --profile preview-dev --platform android  # E2E testing APK (uses dev Supabase)
 eas build --profile preview --platform android      # Sideloadable APK (uses prod Supabase)
 eas build --profile production --platform android   # Google Play AAB
-eas build --profile production --platform ios       # App Store
 ```
+
+**Note:** Android only - no iOS App Store release planned.
 
 **Local Builds (WSL - Unlimited, No Quota):**
 ```bash

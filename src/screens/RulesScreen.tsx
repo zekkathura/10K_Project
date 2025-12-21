@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, 
 import { ThemedLoader } from '../components';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -173,14 +174,14 @@ export default function RulesScreen() {
         .order('rule_number', { ascending: true });
 
       if (fetchError) {
-        console.error('Error fetching extra rules:', fetchError);
+        logger.error('Error fetching extra rules:', fetchError);
         setError('Failed to load extra rules');
         return;
       }
 
       setExtraRules(data || []);
     } catch (err) {
-      console.error('Error loading extra rules:', err);
+      logger.error('Error loading extra rules:', err);
       setError('Failed to load extra rules');
     } finally {
       setLoading(false);
@@ -310,19 +311,42 @@ export default function RulesScreen() {
       );
     }
 
+    // Calculate stats
+    const activeCount = extraRules.filter(r => !r.revoked_by).length;
+    const revokedCount = extraRules.filter(r => !!r.revoked_by).length;
+
     return (
       <View style={styles.extraRulesContainer}>
-        <Text style={styles.extraRulesIntro}>
-          House rules created by our group. Revoked rules are shown with strikethrough.
-        </Text>
+        {/* Stats Summary */}
+        <View style={styles.statsSummary}>
+          <Text style={styles.statsSummaryText}>
+            {activeCount} active{revokedCount > 0 ? ` • ${revokedCount} revoked` : ''}
+          </Text>
+        </View>
+
+        {/* Rules List */}
         {extraRules.map((rule) => {
           const isRevoked = !!rule.revoked_by;
+          // Build metadata line with context
+          const metaParts: string[] = [];
+          if (rule.proposer) {
+            metaParts.push(`Proposed by ${rule.proposer}`);
+          }
+          if (rule.approved_by) {
+            metaParts.push(`approved by ${rule.approved_by}`);
+          }
+          if (rule.rule_date) {
+            metaParts.push(formatDate(rule.rule_date) || '');
+          }
+          const metaLine = metaParts.length > 0 ? metaParts.join(' • ') : 'No details available';
+
           return (
             <View
               key={rule.id}
               style={[styles.ruleCard, isRevoked && styles.ruleCardRevoked]}
             >
               <View style={styles.ruleHeader}>
+                <Text style={styles.ruleIcon}>📜</Text>
                 <Text style={[styles.ruleNumber, isRevoked && styles.revokedText]}>
                   #{rule.rule_number}
                 </Text>
@@ -336,18 +360,10 @@ export default function RulesScreen() {
                 {rule.text}
               </Text>
               <View style={styles.ruleMeta}>
-                <Text style={styles.ruleMetaText}>
-                  Proposed by: {rule.proposer || 'Unknown'}
-                </Text>
-                <Text style={styles.ruleMetaText}>
-                  Approved by: {rule.approved_by || 'Unknown'}
-                </Text>
-                <Text style={styles.ruleMetaText}>
-                  Date: {formatDate(rule.rule_date) || 'Unknown'}
-                </Text>
+                <Text style={styles.ruleMetaText}>{metaLine}</Text>
                 {rule.revoked_by && (
                   <Text style={styles.ruleMetaTextRevoked}>
-                    Revoked by: {rule.revoked_by}
+                    Revoked by {rule.revoked_by}
                   </Text>
                 )}
               </View>
@@ -622,11 +638,20 @@ const createStyles = ({ colors }: Theme) =>
     extraRulesContainer: {
       gap: 12,
     },
-    extraRulesIntro: {
+    statsSummary: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+    },
+    statsSummaryText: {
       fontSize: 14,
-      color: colors.textSecondary,
-      marginBottom: 8,
-      fontStyle: 'italic',
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    ruleIcon: {
+      fontSize: 18,
     },
     ruleCard: {
       backgroundColor: colors.surface,
@@ -688,7 +713,8 @@ const createStyles = ({ colors }: Theme) =>
 
     // Loading/Error/Empty states
     loadingContainer: {
-      paddingVertical: 40,
+      flex: 1,
+      justifyContent: 'center',
       alignItems: 'center',
     },
     loadingText: {

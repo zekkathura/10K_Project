@@ -2,6 +2,55 @@
 
 Use when writing tests for the 10K Scorekeeper application.
 
+## Testing Philosophy: Behavioral vs Implementation
+
+**Always prefer behavioral tests over implementation tests.**
+
+### Behavioral Tests (GOOD) ✅
+Test **what** the code does, not **how** it does it:
+- Test return values and outputs
+- Test thrown errors and error messages
+- Test side effects that are visible to users
+- Resilient to refactoring - if behavior stays same, tests pass
+
+```typescript
+// ✅ BEHAVIORAL - Tests the output
+it('creates a game and returns it with a join code', async () => {
+  const result = await createGame(userId);
+  expect(result.id).toBeDefined();
+  expect(result.join_code).toMatch(/^[A-Z0-9]{6}$/);
+  expect(result.status).toBe('active');
+});
+
+// ✅ BEHAVIORAL - Tests thrown error behavior
+it('rejects scores over 20,000', async () => {
+  await expect(addTurn(gameId, playerId, 25000, false, true))
+    .rejects.toThrow('Score cannot exceed 20,000');
+});
+```
+
+### Implementation Tests (AVOID) ❌
+Test **how** the code works internally:
+- Verify specific method calls with `toHaveBeenCalledWith()`
+- Check call order or call counts
+- Fragile - refactoring breaks tests even when behavior is correct
+
+```typescript
+// ❌ IMPLEMENTATION-FOCUSED - Will break if we change how we call Supabase
+it('calls supabase with correct params', async () => {
+  await createGame(userId);
+  expect(mockSupabase.from).toHaveBeenCalledWith('games');
+  expect(chainMock.insert).toHaveBeenCalledWith(expect.objectContaining({
+    created_by_user_id: userId,
+  }));
+});
+```
+
+### When Implementation Tests Are Acceptable
+- Testing that side effects occur (e.g., logger was called for errors)
+- Verifying security-critical calls (e.g., RLS checks)
+- Integration test setup verification
+
 ## Test Structure
 
 ```
@@ -446,4 +495,62 @@ expect(scores).toContain(500);
 // React Native
 expect(getByText('Loading...')).toBeTruthy();
 expect(queryByText('Error')).toBeNull();
+```
+
+## Test Resilience Guidelines
+
+**Tests should survive code refactoring** - if behavior stays the same, tests should pass.
+
+### DO ✅
+```typescript
+// Test output, not implementation
+expect(result.joinCode).toMatch(/^[A-Z0-9]{6}$/);
+
+// Test error behavior
+await expect(fn()).rejects.toThrow(/invalid|error/i);
+
+// Test coverage ratios for accessibility
+const coverage = labelCount / interactiveCount;
+expect(coverage).toBeGreaterThanOrEqual(0.5);
+
+// Use pattern matching for labels that might change
+expect(content).toMatch(/accessibilityLabel=.*[Ee]mail/);
+
+// Test outcomes, not call counts
+expect(game.status).toBe('active');
+```
+
+### DON'T ❌
+```typescript
+// Don't test exact Supabase calls
+expect(supabase.from).toHaveBeenCalledWith('games');
+
+// Don't test exact label text
+expect(content).toContain('accessibilityLabel="Email address"');
+
+// Don't test implementation order
+expect(mockFn).toHaveBeenNthCalledWith(1, 'first');
+
+// Don't hard-code timeouts in assertions
+await page.waitForTimeout(3000); // Use extendedWaitUntil instead
+```
+
+### Maestro Flow Resilience
+```yaml
+# ✅ Use accessibilityLabel selectors (stable)
+- tapOn:
+    id: "settings-button"  # Stable ID
+
+# ✅ Use pattern matching
+- assertVisible: "Settings"  # Match visible text
+
+# ❌ Avoid coordinate taps (fragile)
+- tapOn:
+    point: "50%,80%"  # Will break with UI changes
+
+# ✅ Handle optional dialogs
+- tapOn:
+    text: "OK"
+    optional: true
+    retryTapIfNoChange: false
 ```

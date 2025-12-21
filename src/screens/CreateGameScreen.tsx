@@ -11,6 +11,7 @@ import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import { createGame } from '../lib/database';
 import { validatePlayerName } from '../lib/validation';
+import { logger } from '../lib/logger';
 import { Profile } from '../lib/types';
 import { Theme, useTheme } from '../lib/theme';
 
@@ -93,7 +94,7 @@ export default function CreateGameScreen({
 
       setAvailablePlayers(sorted.filter((p) => p.id !== currentUserId));
     } catch (error) {
-      console.error('Error loading users:', error);
+      logger.error('Error loading users:', error);
       alert.show({ title: 'Error', message: 'Failed to load users' });
     } finally {
       setLoading(false);
@@ -129,10 +130,7 @@ export default function CreateGameScreen({
   };
 
   const handleCreateGame = async () => {
-    console.log('=== Creating game ===');
-    console.log('Selected users:', Array.from(selectedUserIds));
-    console.log('Guest players:', guestPlayers);
-    console.log('Current user:', currentUserId, currentUserName);
+    logger.debug('Creating game with players:', selectedUserIds.size, 'registered,', guestPlayers.length, 'guests');
 
     if (selectedUserIds.size === 0 && guestPlayers.length === 0) {
       alert.show({ title: 'Error', message: 'Add at least one player' });
@@ -142,9 +140,8 @@ export default function CreateGameScreen({
     setCreating(true);
     try {
       // Create the game
-      console.log('Creating game record...');
       const game = await createGame(currentUserId);
-      console.log('Game created:', game);
+      logger.debug('Game created:', game.id);
 
       // Add all selected registered users as players
       let displayOrder = 0;
@@ -152,7 +149,6 @@ export default function CreateGameScreen({
         const user =
           availablePlayers.find((u) => u.id === userId) ||
           (userId === currentUserId ? { display_name: currentUserName } as Profile : undefined);
-        console.log(`Adding registered player ${displayOrder}:`, user?.display_name || 'Player');
 
         const { error } = await supabase.from('game_players').insert({
           game_id: game.id,
@@ -163,15 +159,13 @@ export default function CreateGameScreen({
         });
 
         if (error) {
-          console.error('Error adding registered player:', error);
+          logger.error('Error adding registered player:', error);
           throw error;
         }
       }
 
       // Add all guest players
       for (const guestName of guestPlayers) {
-        console.log(`Adding guest player ${displayOrder}:`, guestName);
-
         const { error } = await supabase.from('game_players').insert({
           game_id: game.id,
           user_id: null,
@@ -181,16 +175,15 @@ export default function CreateGameScreen({
         });
 
         if (error) {
-          console.error('Error adding guest player:', error);
+          logger.error('Error adding guest player:', error);
           throw error;
         }
       }
 
-      console.log('All players added successfully!');
-      console.log('Calling onGameCreated with game ID:', game.id);
+      logger.debug('Game creation complete:', game.id);
       onGameCreated(game.id);
     } catch (error: any) {
-      console.error('Error creating game:', error);
+      logger.error('Error creating game:', error);
       alert.show({ title: 'Error', message: error.message || 'Failed to create game' });
     } finally {
       setCreating(false);

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, RefreshControl } from 'react-native';
 import { ThemedLoader } from '../components';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
 interface GameStatsScreenProps {
@@ -522,7 +523,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
       setOverallStats(newOverallStats);
       cachedOverallStats = newOverallStats; // Update cache
     } catch (err) {
-      console.error('Error loading stats', err);
+      logger.error('Error loading stats', err);
       setError('Failed to load game stats.');
     } finally {
       // Ensure loading shows for at least one full wobble cycle
@@ -656,7 +657,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                   onPress={() => setPlayerSortMode('avgScore')}
                 >
                   <Text style={[styles.sortButtonText, playerSortMode === 'avgScore' && styles.sortButtonTextActive]}>
-                    By Score
+                    By Avg Score
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -667,18 +668,25 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
               {sortedPlayers.length === 0 ? (
                 <Text style={styles.emptyText}>No data yet.</Text>
               ) : (
-                <ScrollView style={styles.playersList} nestedScrollEnabled>
-                  {sortedPlayers.map((player, index) => (
-                    <View key={player.name + index} style={styles.listRow}>
-                      <Text style={styles.listRank}>{index + 1}</Text>
-                      <View style={styles.listContent}>
-                        <Text style={styles.listName}>{player.name}</Text>
-                        <Text style={styles.listSubtext}>{player.games} games</Text>
+                <>
+                  <View style={styles.listHeaderRow}>
+                    <Text style={styles.listHeaderRank}>#</Text>
+                    <Text style={styles.listHeaderName}>Player</Text>
+                    <Text style={styles.listHeaderScore}>Avg Score</Text>
+                  </View>
+                  <ScrollView style={styles.playersList} nestedScrollEnabled>
+                    {sortedPlayers.map((player, index) => (
+                      <View key={player.name + index} style={styles.listRow}>
+                        <Text style={styles.listRank}>{index + 1}</Text>
+                        <View style={styles.listContent}>
+                          <Text style={styles.listName}>{player.name}</Text>
+                          <Text style={styles.listSubtext}>{player.games} games</Text>
+                        </View>
+                        <Text style={styles.listAvgScore}>{player.avgScore}</Text>
                       </View>
-                      <Text style={styles.listAvgScore}>{player.avgScore}</Text>
-                    </View>
-                  ))}
-                </ScrollView>
+                    ))}
+                  </ScrollView>
+                </>
               )}
             </View>
           ) : (
@@ -926,6 +934,37 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 16,
       fontWeight: '700',
       color: colors.textPrimary,
+    },
+    listHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.divider,
+      marginBottom: 4,
+    },
+    listHeaderRank: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      width: 24,
+      textTransform: 'uppercase',
+    },
+    listHeaderName: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      marginLeft: 10,
+      flex: 1,
+      textTransform: 'uppercase',
+    },
+    listHeaderScore: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      minWidth: 70,
+      textAlign: 'right',
+      textTransform: 'uppercase',
     },
     sortToggle: {
       flexDirection: 'row',

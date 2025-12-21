@@ -1,8 +1,8 @@
 # Maestro Configuration
 # https://maestro.mobile.dev/reference/configuration
 
-# Default app ID - Preview-Dev for E2E testing against 10k-dev Supabase
-appId: com.tenk.scorekeeper.previewdev
+# Default app ID - Using dev build for testing (requires Metro server on port 8081)
+appId: com.tenk.scorekeeper.dev
 
 # App IDs by environment:
 # - Development: com.tenk.scorekeeper.dev (requires dev server)

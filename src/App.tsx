@@ -9,10 +9,11 @@ import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import { ThemeProvider, useThemedStyles, Theme } from './lib/theme';
-import { logger } from './lib/logger';
+import { logger, initializeRemoteDebug } from './lib/logger';
 import { AUTH_STORAGE_KEYS, AUTH_TIMEOUTS, AUTH_ERROR_CODES } from './lib/authConfig';
 import { ProfileCheckResult } from './lib/authTypes';
 import { raceWithTimeout, sleep } from './lib/asyncUtils';
+import { checkAppVersion, getStoreUrl, VersionCheckResult } from './lib/versionCheck';
 
 // Error Boundary to catch crashes and display error screen instead of closing
 interface ErrorBoundaryProps {
@@ -35,8 +36,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error for debugging (won't show in prod due to logger)
-    console.error('App crashed:', error, errorInfo);
+    // Log error for debugging (sanitized by logger)
+    logger.error('App crashed:', error, errorInfo);
   }
 
   render() {
@@ -184,6 +185,73 @@ function ProfileSetupModal({
   );
 }
 
+// Update Required Modal Component
+interface UpdateRequiredModalProps {
+  visible: boolean;
+  versionInfo: VersionCheckResult | null;
+  onUpdate: () => void;
+  onDismiss?: () => void; // Only available if not force update
+}
+
+function UpdateRequiredModal({
+  visible,
+  versionInfo,
+  onUpdate,
+  onDismiss,
+}: UpdateRequiredModalProps) {
+  const styles = useThemedStyles(createModalStyles);
+
+  if (!versionInfo) return null;
+
+  const isForced = versionInfo.forceUpdate;
+  const isMaintenance = versionInfo.maintenanceMode;
+
+  const title = isMaintenance ? 'Maintenance Mode' : 'Update Required';
+  const message = isMaintenance
+    ? versionInfo.maintenanceMessage || 'The app is currently under maintenance. Please try again later.'
+    : isForced
+    ? `A critical update is required to continue using 10K Scorekeeper.\n\nYour version: ${versionInfo.currentVersion}\nRequired: ${versionInfo.minVersion || 'latest'}`
+    : `A new version of 10K Scorekeeper is available.\n\nYour version: ${versionInfo.currentVersion}\nLatest: ${versionInfo.minVersion || 'latest'}`;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={isForced || isMaintenance ? undefined : onDismiss}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={[styles.modalSubtitle, { textAlign: 'center', marginBottom: 20 }]}>
+            {message}
+          </Text>
+
+          <View style={styles.modalButtons}>
+            {!isForced && !isMaintenance && onDismiss && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onDismiss}
+              >
+                <Text style={styles.cancelButtonText}>Later</Text>
+              </TouchableOpacity>
+            )}
+
+            {!isMaintenance && (
+              <TouchableOpacity
+                style={[styles.confirmButton, { flex: isForced ? 1 : undefined }]}
+                onPress={onUpdate}
+              >
+                <Text style={styles.confirmButtonText}>Update Now</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // Loading status for progress display - exported for LoginScreen
 export type LoadingStatus =
   | 'initializing'      // App starting up
@@ -204,6 +272,10 @@ export default function App() {
   const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [creatingProfile, setCreatingProfile] = useState(false);
+
+  // Version check state
+  const [versionCheckResult, setVersionCheckResult] = useState<VersionCheckResult | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   // Track if this is a fresh OAuth callback
   // On web: check URL hash for access_token (captured BEFORE Supabase consumes it)
@@ -365,6 +437,49 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Effect: Initialize remote debug and check app version on startup
+  useEffect(() => {
+    const runStartupChecks = async () => {
+      try {
+        // Initialize remote debug logging first (controls what gets logged)
+        await initializeRemoteDebug(supabase);
+
+        // Then check app version
+        logger.debug('Checking app version...');
+        const result = await checkAppVersion();
+        logger.debug('Version check result:', result);
+
+        setVersionCheckResult(result);
+
+        // Show modal if update needed or maintenance mode
+        if (result.needsUpdate || result.maintenanceMode) {
+          setShowUpdateModal(true);
+        }
+      } catch (err) {
+        logger.warn('Startup checks failed:', err);
+        // Don't block app if checks fail
+      }
+    };
+
+    runStartupChecks();
+  }, []);
+
+  // Handle opening the Play Store
+  const handleOpenStore = () => {
+    const storeUrl = getStoreUrl();
+    Linking.openURL(storeUrl).catch((err) => {
+      logger.error('Failed to open store:', err);
+      if (Platform.OS === 'web') {
+        window.open(storeUrl, '_blank');
+      }
+    });
+  };
+
+  // Handle dismissing update modal (only for non-forced updates)
+  const handleDismissUpdate = () => {
+    setShowUpdateModal(false);
+  };
 
   // Effect 2: Check profile when session is established
   // This runs AFTER session state is updated, ensuring proper sequencing
@@ -731,6 +846,14 @@ export default function App() {
               onConfirm={handleCreateProfile}
               onCancel={handleCancelSetup}
               loading={creatingProfile}
+            />
+
+            {/* Update Required Modal - blocks app if force update or maintenance */}
+            <UpdateRequiredModal
+              visible={showUpdateModal}
+              versionInfo={versionCheckResult}
+              onUpdate={handleOpenStore}
+              onDismiss={versionCheckResult?.forceUpdate || versionCheckResult?.maintenanceMode ? undefined : handleDismissUpdate}
             />
           </ThemedAlertProvider>
         </ThemeProvider>

@@ -7,28 +7,39 @@
 #
 # Usage: runFlow: "../helpers/_login.yaml"
 
-appId: com.tenk.scorekeeper.previewdev
+appId: com.tenk.scorekeeper.dev
 ---
-# Wait for login screen
+# Wait for login screen (dev build may take time to load JS bundle)
 - extendedWaitUntil:
     visible: "LOG IN"
-    timeout: 10000
+    timeout: 30000
 
-# Enter email
-- tapOn: "you@example.com"
+# Enter email (use accessibilityLabel from LoginScreen.tsx)
+- tapOn: "Email address"
 - inputText: "testuser1@10k.test"
 
-# Enter password
-- tapOn: "Enter password"
+# Enter password (use accessibilityLabel from LoginScreen.tsx)
+- tapOn: "Password"
 - inputText: "TestPassword123!"
 
 # Tap login button
 - tapOn: "LOG IN"
 
-# Wait for home screen (returning user goes straight to Home)
+# Wait for either Home screen or Welcome modal (new user needs profile setup)
+- extendedWaitUntil:
+    visible: "Home|Welcome"
+    timeout: 20000
+
+# Handle Welcome modal if it appears (new user without profile)
+- tapOn:
+    text: "Continue"
+    optional: true
+    retryTapIfNoChange: false
+
+# Wait for Home to be visible after Welcome modal dismissed
 - extendedWaitUntil:
     visible: "Home"
-    timeout: 20000
+    timeout: 10000
 
 # Dismiss any error dialogs that may appear
 - tapOn:

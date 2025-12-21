@@ -117,13 +117,9 @@ export async function checkAppVersion(): Promise<VersionCheckResult> {
 }
 
 /**
- * Get the appropriate store URL for updates
+ * Get the Google Play Store URL for updates
+ * Note: Android only - no iOS release planned
  */
 export function getStoreUrl(): string {
-  // TODO: Replace with your actual store URLs
-  const iosUrl = 'https://apps.apple.com/app/10k-scorekeeper/id0000000000';
-  const androidUrl = 'https://play.google.com/store/apps/details?id=com.tenk.scorekeeper';
-
-  // For now, return a generic message since we're not published yet
-  return androidUrl;
+  return 'https://play.google.com/store/apps/details?id=com.tenk.scorekeeper';
 }
