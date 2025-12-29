@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import { ThemeProvider, useThemedStyles, Theme } from './lib/theme';
-import { logger, initializeRemoteDebug } from './lib/logger';
+import { logger, initializeLogger, initializeRemoteDebug } from './lib/logger';
 import { AUTH_STORAGE_KEYS, AUTH_TIMEOUTS, AUTH_ERROR_CODES } from './lib/authConfig';
 import { ProfileCheckResult } from './lib/authTypes';
 import { raceWithTimeout, sleep } from './lib/asyncUtils';
@@ -438,11 +438,14 @@ export default function App() {
     };
   }, []);
 
-  // Effect: Initialize remote debug and check app version on startup
+  // Effect: Initialize logger and check app version on startup
   useEffect(() => {
     const runStartupChecks = async () => {
       try {
-        // Initialize remote debug logging first (controls what gets logged)
+        // Initialize logger with Supabase client (enables error logging to backend)
+        initializeLogger(supabase);
+
+        // Initialize remote debug logging (controls what gets logged to console)
         await initializeRemoteDebug(supabase);
 
         // Then check app version

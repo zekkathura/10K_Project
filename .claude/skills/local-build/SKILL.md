@@ -26,6 +26,11 @@ Only rebuild if code changes need testing on native device.
 
 Local builds run in WSL (Windows Subsystem for Linux) and produce APKs without using EAS cloud build quota. This enables unlimited builds for testing.
 
+**⚠️ IMPORTANT: Local builds do NOT include R8/ProGuard mapping files.** Google Play will show a deobfuscation warning and crash reports will be obfuscated. This is fine for internal testing, but **for official production releases, use EAS cloud builds instead:**
+```bash
+eas build --profile production --platform android   # Cloud build - includes mapping files
+```
+
 ## Prerequisites (Already Installed)
 
 WSL Ubuntu environment with:
@@ -115,10 +120,37 @@ eas build --profile production --platform android --local --output ./build/10k-p
 
 ## Output Locations
 
-Build files are output to the `build/` directory:
+Build files are output to the `build/` directory with versioned names:
 - `build/10k-dev.apk` - Development client APK (requires Metro server)
 - `build/10k-preview-dev.apk` - Standalone testing APK (10k-dev database)
-- `build/10k-production.aab` - Google Play bundle (10k-prod database)
+- `build/10k-production-v{VERSION}-b{BUILD_NUMBER}.aab` - Google Play bundle (10k-prod database)
+
+**Naming Convention for Production AABs:**
+- Format: `10k-production-v{APP_VERSION}-b{BUILD_NUMBER}.aab`
+- Example: `10k-production-v1.0.1-b4.aab`
+
+**⚠️ REQUIRED: Production Build Workflow (Claude Code MUST follow):**
+
+Before building a new production AAB, Claude Code must:
+
+1. **Ask user for version number** using AskUserQuestion tool:
+   - Show current version (e.g., "Current: 1.0.0")
+   - Recommend incrementing last digit by 0.0.1 (e.g., "1.0.1 (Recommended)")
+   - Let user specify custom version
+
+2. **Auto-increment BUILD_NUMBER** by 1 in `app.config.js`
+
+3. **Archive existing AABs** - Move all `.aab` files from `build/` to `build/archive/`
+
+4. **Build new AAB** with versioned filename
+
+Example interaction:
+```
+Claude: "Current version is 1.0.0, build 3. What version for the new release?"
+Options: "1.0.1 (Recommended)", "1.1.0", "2.0.0", "Other"
+User selects or enters version
+Claude: Updates APP_VERSION and BUILD_NUMBER, archives old AABs, builds new one
+```
 
 ### Finding Build Files (Claude Code)
 

@@ -113,6 +113,39 @@ updated_at   TIMESTAMP WITH TIME ZONE
 - `force_update`: If "true", blocks app until updated
 - `maintenance_mode`: If "true", shows maintenance message
 - `maintenance_message`: Message shown during maintenance
+- `debug_logging_enabled`: If "true", enables debug logging in production builds
+
+---
+
+### error_logs (Production error tracking)
+```
+id           UUID NOT NULL PK
+created_at   TIMESTAMP WITH TIME ZONE NOT NULL
+user_id      UUID → auth.users.id (SET NULL)  -- NULL if not logged in
+level        TEXT NOT NULL ('error', 'warn', 'info')
+message      TEXT NOT NULL
+error_name   TEXT           -- e.g., "TypeError"
+error_stack  TEXT           -- Sanitized stack trace
+screen       TEXT           -- Which screen the error occurred on
+action       TEXT           -- What the user was doing
+app_version  TEXT           -- e.g., "1.0.0"
+platform     TEXT           -- "android", "ios", "web"
+extra_data   JSONB          -- Flexible additional context
+```
+
+**RLS:** INSERT only (anyone can log errors). No SELECT/UPDATE/DELETE via API.
+**View errors:** Supabase Dashboard → Table Editor → error_logs
+
+**Useful queries (run in SQL Editor):**
+```sql
+-- Recent errors (last 24h)
+SELECT created_at, level, message, screen, platform, app_version
+FROM error_logs WHERE created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+
+-- Clear old logs (keep 30 days)
+DELETE FROM error_logs WHERE created_at < NOW() - INTERVAL '30 days';
+```
 
 ---
 

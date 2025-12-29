@@ -16,7 +16,7 @@ const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW 
 
 // App version - update this for each release
 const APP_VERSION = '1.0.0';
-const BUILD_NUMBER = 1;
+const BUILD_NUMBER = 3;
 
 // Package identifiers
 const getPackageName = () => {

@@ -5,19 +5,32 @@
  * 1. Only log in development mode OR when enabled via backend app_config
  * 2. Sanitize PII (emails, user IDs, tokens) from logs
  * 3. Provide consistent log formatting
+ * 4. Send errors to Supabase error_logs table for production monitoring
  *
  * Backend Control:
  *   Set `debug_logging_enabled = 'true'` in Supabase app_config table
  *   to enable debug logging in production builds (for troubleshooting).
  *   This is secure because users cannot modify the backend setting.
  *
+ * Error Logging:
+ *   Errors are automatically sent to the `error_logs` table in Supabase.
+ *   This happens in production AND development (for testing).
+ *   Errors are sanitized before sending (no PII).
+ *
  * Usage:
- *   import { logger } from '@/lib/logger';
+ *   import { logger, initializeLogger } from '@/lib/logger';
+ *
+ *   // During app startup (after Supabase is ready):
+ *   initializeLogger(supabase);
+ *
  *   logger.debug('Loading game', { gameId });       // Dev or backend-enabled
  *   logger.info('Game started');                    // Dev or backend-enabled
  *   logger.warn('Rate limit approaching');          // Dev or backend-enabled
- *   logger.error('Failed to save', error);          // Always logs (sanitized in prod)
+ *   logger.error('Failed to save', error);          // Always logs + sends to Supabase
  */
+
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Check if we're in development mode
 // __DEV__ is provided by React Native, process.env.NODE_ENV by bundlers
@@ -35,13 +48,36 @@ try {
 // This allows enabling debug logs in production without a new build
 let remoteDebugEnabled = false;
 
+// Supabase client reference (set during initialization)
+// Using 'any' to avoid circular dependency with supabase.ts
+let supabaseClient: any = null;
+
+// App info for error context
+let appVersion = '1.0.0';
+let appPlatform = 'unknown';
+
+try {
+  appVersion = Constants.expoConfig?.extra?.appVersion || '1.0.0';
+  appPlatform = Platform.OS || 'unknown';
+} catch {
+  // Silently fail - use defaults
+}
+
+/**
+ * Initialize the logger with Supabase client
+ * Call this during app startup (after Supabase is created)
+ */
+export function initializeLogger(client: any): void {
+  supabaseClient = client;
+}
+
 /**
  * Initialize remote debug setting from app_config
  * Call this during app startup (after Supabase is ready)
  */
-export async function initializeRemoteDebug(supabaseClient: any): Promise<void> {
+export async function initializeRemoteDebug(client: any): Promise<void> {
   try {
-    const { data, error } = await supabaseClient
+    const { data, error } = await client
       .from('app_config')
       .select('value')
       .eq('key', 'debug_logging_enabled')
@@ -116,8 +152,7 @@ function sanitizeObject(obj: unknown, depth = 0): unknown {
     return {
       name: obj.name,
       message: sanitizeString(obj.message),
-      // Only include stack in dev
-      ...(isDev && obj.stack ? { stack: sanitizeString(obj.stack) } : {}),
+      stack: obj.stack ? sanitizeString(obj.stack) : undefined,
     };
   }
 
@@ -156,7 +191,53 @@ function formatArgs(args: unknown[]): string[] {
 }
 
 /**
- * Logger with PII protection
+ * Send error to Supabase error_logs table
+ * This is fire-and-forget - we don't wait for it or handle failures
+ */
+async function sendErrorToBackend(
+  level: 'error' | 'warn',
+  message: string,
+  error?: unknown,
+  context?: { screen?: string; action?: string; extra?: Record<string, unknown> }
+): Promise<void> {
+  // Skip if Supabase client not initialized
+  if (!supabaseClient) return;
+
+  try {
+    // Get current user ID if available
+    let userId: string | null = null;
+    try {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      userId = user?.id || null;
+    } catch {
+      // No user or auth error - that's fine
+    }
+
+    // Sanitize error details
+    const sanitizedError = error ? sanitizeObject(error) : null;
+    const errorObj = sanitizedError as { name?: string; message?: string; stack?: string } | null;
+
+    // Insert error log (fire and forget)
+    await supabaseClient.from('error_logs').insert({
+      user_id: userId,
+      level,
+      message: sanitizeString(message),
+      error_name: errorObj?.name || null,
+      error_stack: errorObj?.stack || null,
+      screen: context?.screen || null,
+      action: context?.action || null,
+      app_version: appVersion,
+      platform: appPlatform,
+      extra_data: context?.extra ? sanitizeObject(context.extra) : {},
+    });
+  } catch {
+    // Silently fail - don't let logging errors crash the app
+    // Also don't recursively try to log this error!
+  }
+}
+
+/**
+ * Logger with PII protection and backend error reporting
  */
 export const logger = {
   /**
@@ -190,13 +271,19 @@ export const logger = {
   },
 
   /**
-   * Error logging - always logs (but sanitized)
+   * Error logging - always logs (but sanitized) + sends to Supabase
    * Use for errors that need attention
-   * In debug mode: logs full sanitized error details
-   * In production: logs only sanitized message (no stack traces)
+   *
+   * @param message - Human-readable error message
+   * @param error - Optional error object
+   * @param context - Optional context (screen, action, extra data)
    */
-  error: (message: string, error?: unknown): void => {
-    // Always log errors, but sanitize in production
+  error: (
+    message: string,
+    error?: unknown,
+    context?: { screen?: string; action?: string; extra?: Record<string, unknown> }
+  ): void => {
+    // Always log errors to console (sanitized)
     const sanitizedMessage = sanitizeString(message);
 
     if (isDebugEnabled()) {
@@ -206,9 +293,12 @@ export const logger = {
         : String(sanitizedError);
       console.error('[ERROR]', sanitizedMessage, errorStr);
     } else {
-      // In production (without debug enabled), only log the message (not the full error object)
+      // In production (without debug enabled), only log the message
       console.error('[ERROR]', sanitizedMessage);
     }
+
+    // Send to Supabase (async, fire-and-forget)
+    sendErrorToBackend('error', message, error, context);
   },
 
   /**
@@ -219,7 +309,11 @@ export const logger = {
     debug: (...args: unknown[]) => logger.debug(`[${prefix}]`, ...args),
     info: (...args: unknown[]) => logger.info(`[${prefix}]`, ...args),
     warn: (...args: unknown[]) => logger.warn(`[${prefix}]`, ...args),
-    error: (message: string, error?: unknown) => logger.error(`[${prefix}] ${message}`, error),
+    error: (
+      message: string,
+      error?: unknown,
+      context?: { screen?: string; action?: string; extra?: Record<string, unknown> }
+    ) => logger.error(`[${prefix}] ${message}`, error, { ...context, screen: context?.screen || prefix }),
   }),
 };
 

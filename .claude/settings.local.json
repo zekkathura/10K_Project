@@ -184,7 +184,20 @@
       "Bash(maestro --device emulator-5554 test:*)",
       "Bash(dir \"C:\\\\Users\\\\blink\\\\.maestro\\\\tests\\\\2025-12-20_003629\\\\*.png\")",
       "Bash(type \"C:\\\\Users\\\\blink\\\\.maestro\\\\tests\\\\2025-12-20_004415\\\\screenshot-❌-1766216694621-\\(01-smoke-test.yaml\\).png\")",
-      "Bash(adb -s emulator-5554 shell am force-stop:*)"
+      "Bash(adb -s emulator-5554 shell am force-stop:*)",
+      "Bash(cmd /c \"dir c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper && npm test\")",
+      "Bash(wsl -d Ubuntu -e bash -c \"export ANDROID_HOME=/home/blink/android-sdk && export ANDROID_SDK_ROOT=/home/blink/android-sdk && export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && export PATH=/home/blink/android-sdk/cmdline-tools/latest/bin:/home/blink/android-sdk/platform-tools:/usr/local/bin:/usr/bin:/bin && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && eas whoami 2>&1\":*)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" status)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" branch --show-current)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" log origin/test1.7..HEAD --oneline)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" push -u origin test1.7)",
+      "Bash(move:*)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" branch -a)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" log --oneline -5)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" status --porcelain)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" add -A)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"$\\(cat <<''EOF''\ntest1.7: Release prep - versioned builds, archive workflow, documentation\n\n- Add versioned AAB naming convention \\(v{VERSION}-b{BUILD}\\)\n- Create build/archive/ for old AAB files\n- Update local-build skill with required production workflow\n- Increment BUILD_NUMBER to 3 for internal testing release\n- Update CLAUDE.md with build workflow requirements\n- Add error_logs SQL script\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []

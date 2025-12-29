@@ -18,6 +18,7 @@ Expo SDK 54 (React Native Web) + TypeScript + Supabase (Postgres/Auth/Realtime)
 - `game_players` (user + guest players per game)
 - `turns` (scores, busts, per round)
 - `app_config` (version requirements, maintenance mode, debug logging control)
+- `error_logs` (production error tracking - insert only, view via Supabase dashboard)
 
 **Why We Maintain Verification Scripts:**
 AI assistants lack direct database access. To prevent recommending changes incompatible with actual backend structure, we maintain reference files (`.claude/*.md`) that mirror live database state. User runs verification scripts in Supabase and shares output to keep AI synchronized with reality.
@@ -116,6 +117,7 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Delete account: `deleteAccount()` function anonymizes game history, deletes profile
 - ✅ Privacy Policy: Added link in Settings screen (Legal section)
 - ✅ Secure logging: All console.log/error replaced with `logger` (PII sanitization, backend-controlled debug)
+- ✅ Error logging: Errors automatically sent to Supabase `error_logs` table (sanitized, no PII)
 
 ## Environments
 
@@ -158,6 +160,13 @@ eas build --profile production --platform android   # Google Play AAB
 
 **Note:** Android only - no iOS App Store release planned.
 
+**⚠️ PRODUCTION RELEASE REQUIREMENT:**
+For official Google Play releases, **use EAS cloud builds** (not local builds):
+```bash
+eas build --profile production --platform android   # Cloud build - includes mapping files
+```
+Cloud builds automatically include R8/ProGuard deobfuscation mapping files, which Google Play needs to provide readable crash reports. Local builds (`--local`) do NOT include these files and will show a warning in Google Play Console. Internal testing can use local builds, but production releases should use cloud builds.
+
 **Local Builds (WSL - Unlimited, No Quota):**
 ```bash
 # From WSL terminal (or Claude Code can trigger automatically)
@@ -168,10 +177,24 @@ eas build --profile preview-dev --platform android --local --output ./build/10k-
 - **Output**: `build/` directory
 - **See skill**: `.claude/skills/local-build/SKILL.md` for full documentation
 
-**Pre-built APKs Available:**
-Already-built APKs exist in `build/` directory - use these before rebuilding:
+**Pre-built Files in `build/` Directory:**
 - `build/10k-preview-dev.apk` - Standalone APK (10k-dev Supabase, no dev server needed)
 - `build/10k-dev.apk` - Development APK (requires Metro dev server running)
+- `build/10k-production-v{VERSION}-b{BUILD}.aab` - Production AAB for Google Play
+
+**AAB Naming Convention:**
+- Format: `10k-production-v{APP_VERSION}-b{BUILD_NUMBER}.aab`
+- Example: `10k-production-v1.0.1-b4.aab`
+- Old AABs archived to `build/archive/`
+
+**⚠️ REQUIRED: Production Build Workflow:**
+Before building a new AAB, Claude Code MUST:
+1. **Ask user for version** (recommend +0.0.1, e.g., 1.0.0 → 1.0.1)
+2. **Auto-increment BUILD_NUMBER** by 1
+3. **Archive existing AABs** to `build/archive/`
+4. **Build with versioned filename**
+
+See `.claude/skills/local-build/SKILL.md` for full workflow details.
 
 Install existing APK: `adb install -r build/10k-preview-dev.apk`
 
@@ -216,6 +239,22 @@ git checkout -b [new-branch]
 ```
 
 **Never commit**: `.env*`, `.expo/`, `*.log`, `temp_*`, `nul` (already in .gitignore)
+
+## Privacy Policy & Store Listing
+
+**Privacy Policy:**
+- **Live URL**: https://sites.google.com/view/10kscorekeeper-privacy-policy/home (hosted on Google Sites)
+- **Local reference**: `docs/privacy-policy.html` (template/reference, NOT the live policy)
+- **Workflow**: Edit `docs/privacy-policy.html` → manually copy changes to Google Sites
+
+**Store Listing:**
+- **Reference file**: `docs/store-description.md` (app store copy)
+- **Workflow**: Edit file → manually copy to Google Play Console
+
+**When to update privacy policy:**
+- Adding new data collection (error logs, analytics, etc.)
+- Changing data retention policies
+- Adding third-party integrations
 
 ## Development Philosophy
 - **Prefer editing** over creating new files

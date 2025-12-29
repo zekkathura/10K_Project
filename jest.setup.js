@@ -47,3 +47,15 @@ jest.mock('expo-web-browser', () => ({
 jest.mock('react-native/Libraries/Alert/Alert', () => ({
   alert: jest.fn(),
 }));
+
+// Mock expo-constants
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    expoConfig: {
+      extra: {
+        appVersion: '1.0.0-test',
+      },
+    },
+  },
+}));
