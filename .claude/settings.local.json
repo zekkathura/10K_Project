@@ -197,7 +197,14 @@
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" log --oneline -5)",
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" status --porcelain)",
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" add -A)",
-      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"$\\(cat <<''EOF''\ntest1.7: Release prep - versioned builds, archive workflow, documentation\n\n- Add versioned AAB naming convention \\(v{VERSION}-b{BUILD}\\)\n- Create build/archive/ for old AAB files\n- Update local-build skill with required production workflow\n- Increment BUILD_NUMBER to 3 for internal testing release\n- Update CLAUDE.md with build workflow requirements\n- Add error_logs SQL script\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"$\\(cat <<''EOF''\ntest1.7: Release prep - versioned builds, archive workflow, documentation\n\n- Add versioned AAB naming convention \\(v{VERSION}-b{BUILD}\\)\n- Create build/archive/ for old AAB files\n- Update local-build skill with required production workflow\n- Increment BUILD_NUMBER to 3 for internal testing release\n- Update CLAUDE.md with build workflow requirements\n- Add error_logs SQL script\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" push origin test1.7)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" checkout main)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" pull origin main)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" stash)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" branch -D main)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" checkout -b main)",
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"chore: settings update\" --allow-empty)"
     ],
     "deny": [],
     "ask": []
