@@ -756,18 +756,23 @@ export default function App() {
       }
 
       let error;
+      let savedProfile = null;
+
       if (existingProfile) {
-        // Profile exists - update it
+        // Profile exists - update it and return the updated row
         const result = await supabase
           .from('profiles')
           .update({
             display_name: trimmedName,
             email: pendingUser.email,
           })
-          .eq('id', pendingUser.id);
+          .eq('id', pendingUser.id)
+          .select('id, display_name')
+          .single();
         error = result.error;
+        savedProfile = result.data;
       } else {
-        // Profile doesn't exist - insert it
+        // Profile doesn't exist - insert it and return the inserted row
         const result = await supabase
           .from('profiles')
           .insert({
@@ -775,8 +780,11 @@ export default function App() {
             email: pendingUser.email,
             display_name: trimmedName,
             full_name: fullName, // Immutable, for admin reference only
-          });
+          })
+          .select('id, display_name')
+          .single();
         error = result.error;
+        savedProfile = result.data;
       }
 
       if (error) {
@@ -803,7 +811,32 @@ export default function App() {
         return;
       }
 
-      logger.debug('Profile created successfully');
+      // Verify the profile was actually created/updated
+      if (!savedProfile) {
+        logger.error('Profile operation returned no data - verifying...');
+
+        // Do a verification query to check if profile exists
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .eq('id', pendingUser.id)
+          .single();
+
+        if (verifyError || !verifyData) {
+          logger.error('Profile verification failed:', verifyError);
+          const alertMsg = 'Profile creation could not be verified. Please try signing out and back in.';
+          if (Platform.OS === 'web') {
+            window.alert(alertMsg);
+          } else {
+            Alert.alert('Error', alertMsg);
+          }
+          return;
+        }
+
+        logger.debug('Profile verified via secondary query:', verifyData.display_name);
+      } else {
+        logger.debug('Profile created/updated successfully:', savedProfile.display_name);
+      }
       // Clear setup state - user can now proceed to home
       setNeedsProfileSetup(false);
       setPendingUser(null);

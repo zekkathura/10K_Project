@@ -14,8 +14,7 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${DEV_SUPABASE_ANON_KEY}"
       },
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug"
+        "buildType": "apk"
       },
       "ios": {
         "simulator": true

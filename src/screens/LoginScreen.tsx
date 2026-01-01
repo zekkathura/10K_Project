@@ -226,19 +226,36 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
       if (data.user) {
         logger.debug('Creating profile for email signup');
 
-        const { error: profileError } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: data.user.id,
             email: trimmedEmail,
             display_name: trimmedDisplayName,
-          });
+          })
+          .select('id, display_name')
+          .single();
 
         if (profileError) {
           logger.error('Profile creation error', profileError);
-          showAlert('Profile Error', 'Profile creation failed. You may need to set your display name in Settings.');
+          showAlert('Profile Error', `Profile creation failed (${profileError.code || 'unknown'}). You may need to set your display name in Settings.`);
+        } else if (!profileData) {
+          // Insert returned no data - verify it was created
+          logger.warn('Profile insert returned no data, verifying...');
+          const { data: verifyData, error: verifyError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', data.user.id)
+            .single();
+
+          if (verifyError || !verifyData) {
+            logger.error('Profile verification failed:', verifyError);
+            showAlert('Profile Error', 'Profile creation could not be verified. You may need to set your display name in Settings.');
+          } else {
+            logger.debug('Profile verified via secondary query');
+          }
         } else {
-          logger.debug('Profile created successfully for email signup');
+          logger.debug('Profile created successfully for email signup:', profileData.display_name);
         }
       }
 

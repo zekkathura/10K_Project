@@ -10,8 +10,8 @@
 -- STEP 1: Set your variables (EDIT THESE VALUES)
 DO $$
 DECLARE
-  v_guest_name TEXT := 'Mason';                   -- Guest's name from game_players
-  v_new_user_email TEXT := 'blinkafailed@gmail.com';  -- Friend's signup email
+  v_guest_name TEXT := 'Kent';                   -- Guest's name from game_players
+  v_new_user_email TEXT := 'kentrichardsanchez@gmail.com';  -- Friend's signup email
   v_new_user_id UUID;
   v_updated_count INTEGER;
 BEGIN

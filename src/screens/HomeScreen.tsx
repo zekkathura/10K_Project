@@ -12,6 +12,9 @@ import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 type NavTab = 'home' | 'game' | 'play' | 'stats' | 'rules';
 const PLAY_COLOR = '#FF7A00';
 
+// Navigation bar height (play button 60 + padding 6 + label ~16 = ~82)
+const NAV_BAR_HEIGHT = 82;
+
 // Platform-aware alert helper
 const showAlert = (title: string, message: string) => {
   if (Platform.OS === 'web') {
@@ -249,7 +252,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.contentWrapper}>
+      <View style={[styles.contentWrapper, { paddingBottom: NAV_BAR_HEIGHT + insets.bottom }]}>
         {showGameStats ? (
           <GameStatsScreen
             navigation={{ goBack: handleCloseStats }}
@@ -355,7 +358,7 @@ export default function HomeScreen() {
 const createStyles = ({ colors }: Theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    contentWrapper: { flex: 1, paddingBottom: 90 },
+    contentWrapper: { flex: 1 }, // paddingBottom applied dynamically via NAV_BAR_HEIGHT + insets.bottom
     topHeader: {
       minHeight: 54,
       paddingVertical: 8,

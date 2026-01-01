@@ -105,11 +105,11 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
     return () => clearInterval(interval);
   }, [loading]);
 
-  const StatCard = ({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) => (
+  const StatCard = ({ label, value, subtext, subtextHighlight }: { label: string; value: string | number; subtext?: string; subtextHighlight?: boolean }) => (
     <View style={styles.statCard}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-      {subtext ? <Text style={styles.statSubtext}>{subtext}</Text> : null}
+      {subtext ? <Text style={[styles.statSubtext, subtextHighlight && styles.statSubtextHighlight]}>{subtext}</Text> : null}
     </View>
   );
 
@@ -592,7 +592,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                   onPress={() => setActiveModal('bestTurn')}
                   disabled={!userStats.bestTurnDetail}
                 />
-                <StatCard label="Bust Streak" value={userStats.longestBustStreak} subtext="Longest" />
+                <StatCard label="Longest Bust Streak" value={userStats.longestBustStreak} />
               </View>
             </View>
           ) : (
@@ -601,7 +601,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         </View>
 
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Overall</Text>
+          <Text style={styles.sectionTitle}>All Players</Text>
+          <Text style={styles.sectionSubtitle}>Stats across all games and players</Text>
           {overallStats ? (
             <>
               <View style={styles.masonryContainer}>
@@ -627,9 +628,10 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                     value={Math.round(overallStats.averageScorePerRound)}
                   />
                   <StatCard
-                    label="Bust Streak"
+                    label="Longest Bust Streak"
                     value={overallStats.longestBustStreak}
-                    subtext={overallStats.longestBustStreak > 0 ? `By ${overallStats.longestBustStreakPlayer}` : undefined}
+                    subtext={overallStats.longestBustStreak > 0 ? overallStats.longestBustStreakPlayer : undefined}
+                    subtextHighlight
                   />
                 </View>
               </View>
@@ -830,6 +832,11 @@ const createStyles = ({ colors }: Theme) =>
       fontWeight: '700',
       color: colors.textPrimary,
       marginTop: 10,
+      marginBottom: 4,
+    },
+    sectionSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
       marginBottom: 10,
     },
     sectionHeaderRow: {
@@ -879,6 +886,10 @@ const createStyles = ({ colors }: Theme) =>
       marginTop: 6,
       fontSize: 12,
       color: colors.textTertiary,
+    },
+    statSubtextHighlight: {
+      color: colors.accentLight,
+      fontWeight: '600',
     },
     // Highlight stat card styles
     highlightStatCard: {

@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import {
@@ -97,6 +98,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
 
   const { theme } = useTheme();
   const alert = useThemedAlert();
+  const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get('window').width;
 
   useImperativeHandle(ref, () => ({
@@ -223,6 +225,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const cellPadding = Math.max(4, Math.round(8 * fitFactor));
   const modalContentWidth = Math.min(screenWidth * 0.85, 420); // matches modal maxWidth
   const modalInnerPadding = 40; // paddingHorizontal * 2 (20 each side in modalContent)
+
+  // Quick score button sizing - responsive to modal width
+  // 5 buttons + 4 gaps (6px each) = 24px of gaps
+  const QUICK_BUTTON_COUNT = 5;
+  const QUICK_BUTTON_GAP = 6;
+  const quickButtonAvailableWidth = modalContentWidth - modalInnerPadding;
+  const quickButtonWidth = Math.floor(
+    (quickButtonAvailableWidth - (QUICK_BUTTON_COUNT - 1) * QUICK_BUTTON_GAP) / QUICK_BUTTON_COUNT
+  );
+  // Clamp to reasonable bounds (min 48px for touch target, max 72px to prevent oversized buttons)
+  const clampedQuickButtonWidth = Math.max(48, Math.min(72, quickButtonWidth));
   const previewAvailableWidth = Math.max(200, modalContentWidth - modalInnerPadding);
   const previewFitFactor = Math.min(1, previewAvailableWidth / (baseTableWidth || previewAvailableWidth));
   const previewRoundColWidth = baseRoundColWidth * previewFitFactor;
@@ -753,7 +766,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         </View>
       )}
 
-      <View style={styles.tableContainer}>
+      <View style={[styles.tableContainer, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View
             style={{
@@ -852,7 +865,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                  {selectedPlayer ? ` ${getDisplayName(selectedPlayer)}` : ''}
               </Text>
             <Text style={styles.modalSubtitle}>
-              Round {selectedRound} | Current: {selectedTurn ? (selectedTurn.is_bust ? 'Bust' : selectedTurn.score) : '-'}
+              Round {selectedRound} | Current total: {totals[selectedPlayer?.id ?? ''] ?? 0}
             </Text>
             <View style={styles.inputRow}>
               <TextInput
@@ -892,7 +905,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               {[50, 100, 250, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`add-${amount}`}
-                  style={styles.quickScoreButton}
+                  style={[styles.quickScoreButton, { width: clampedQuickButtonWidth }]}
                   onPress={() => {
                     const current = parseInt(scoreInput || '0', 10) || 0;
                     const newScore = Math.min(current + amount, 20000);
@@ -902,7 +915,15 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   accessibilityLabel={`Add ${amount}`}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.quickScoreTextAdd}>+{amount}</Text>
+                  <Text
+                    style={styles.quickScoreTextAdd}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    +{amount}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -912,7 +933,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               {[50, 100, 250, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`sub-${amount}`}
-                  style={styles.quickScoreButton}
+                  style={[styles.quickScoreButton, { width: clampedQuickButtonWidth }]}
                   onPress={() => {
                     const current = parseInt(scoreInput || '0', 10) || 0;
                     const newScore = Math.max(current - amount, 0);
@@ -922,7 +943,15 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   accessibilityLabel={`Subtract ${amount}`}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.quickScoreTextSub}>-{amount}</Text>
+                  <Text
+                    style={styles.quickScoreTextSub}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    -{amount}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1287,17 +1316,21 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     modalButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
     quickScoreRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center', // Center the row of buttons
+      flexWrap: 'nowrap', // Prevent wrapping - buttons will shrink via adjustsFontSizeToFit
       gap: 6,
       marginTop: 10,
     },
     quickScoreButton: {
-      flex: 1,
-      paddingVertical: 8,
-      paddingHorizontal: 4,
+      // Width is set dynamically via inline style (clampedQuickButtonWidth)
+      // Removed flex: 1 to use calculated width instead
+      minHeight: 40, // Ensure minimum touch target
+      paddingVertical: 10,
+      paddingHorizontal: 6,
       borderRadius: 6,
       backgroundColor: colors.surfaceSecondary,
       alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -1305,11 +1338,13 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       color: colors.success,
       fontWeight: '700',
       fontSize: 13,
+      textAlign: 'center',
     },
     quickScoreTextSub: {
       color: colors.error,
       fontWeight: '700',
       fontSize: 13,
+      textAlign: 'center',
     },
     modalButton: {
       flex: 1,

@@ -3,7 +3,7 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2025-12-14
+**Last Verified:** 2026-01-01
 **Current Mode:** 🚧 DEVELOPMENT (Permissive policies enabled)
 
 **Note:** This file is maintained for quick reference. For current state, use:
@@ -78,6 +78,7 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 #### SELECT Policies
 - ✅ `Users can view players in their games` - View players in games user is in
 - ✅ `Users can view players in active games` - View players in any active game
+- ✅ `Users can view players in completed games` - View players in ended games (for stats)
 
 #### INSERT Policies
 - ✅ `Users can join active games` - Users can add themselves to active games
@@ -86,10 +87,12 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 #### UPDATE Policies
 - ✅ `Users can update their own player records` - Users can update own record
 - ✅ `Game creators can update players in their games` - Creators can update any player
+- ✅ `Game participants can update players` - Any player in a game can update player records (reorder)
 
 #### DELETE Policies
 - ✅ `Users can remove themselves from games` - Users can leave games
 - ✅ `Game creators can remove players from their games` - Creators can remove any player
+- ✅ `Game participants can remove players` - Any player in a game can remove players
 
 ---
 
@@ -97,6 +100,7 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 
 #### SELECT Policies
 - ✅ `Users can view turns in their games` - View turns for games user is in
+- ✅ `Users can view turns in completed games` - View turns in ended games (for stats)
 
 #### INSERT Policies
 - ✅ `Players can add turns in their games` - Add turns to games user is in

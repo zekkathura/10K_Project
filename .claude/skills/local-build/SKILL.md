@@ -262,3 +262,24 @@ wsl -d Ubuntu -- bash -c "yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanage
 6. **Use Glob tool for finding files** - `dir` and `ls` commands have path escaping issues on Windows. Use the Glob tool with pattern `build/**/*.apk` to reliably find APK files.
 
 7. **Production builds need keystore** - First production build requires interactive keystore generation (user must run in WSL terminal). Subsequent builds work normally. Back up `credentials.json` securely.
+
+8. **Always use `-d Ubuntu`** - Use `wsl -d Ubuntu -e bash -c "..."` not just `wsl -e bash -c "..."`. Without specifying the distro, WSL may use Windows paths and cache, causing gradle errors like "android:attr/lStar not found".
+
+9. **Delete android/ directory before profile switches** - When switching between build profiles (e.g., development to preview-dev), delete the `android/` directory first. Otherwise, EAS uses cached native code with wrong package name.
+
+10. **Version APK filenames** - Include version and build number in APK names for clarity:
+    - `10k-preview-dev-v1.0.1-b4.apk` (not just `10k-preview-dev.apk`)
+    - Format: `10k-{profile}-v{VERSION}-b{BUILD}.apk`
+
+## App Naming Convention
+
+Each build profile has a distinct app name to identify builds on device:
+
+| Profile | App Name on Device | Package ID |
+|---------|-------------------|------------|
+| development | DEV - 10K Scorekeeper | com.tenk.scorekeeper.dev |
+| preview-dev | PREVIEW DEV - 10K Scorekeeper | com.tenk.scorekeeper.previewdev |
+| preview | PREVIEW - 10K Scorekeeper | com.tenk.scorekeeper.preview |
+| production | 10K Scorekeeper | com.tenk.scorekeeper |
+
+Configured in `app.config.js` via `getAppName()` and `getPackageName()` functions.

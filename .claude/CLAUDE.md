@@ -78,11 +78,12 @@ When debugging auth/permission issues or after policy changes:
 ### Use Skills First (`.claude/skills/`)
 **Before writing code, check these Skills for patterns:**
 - `expo-dev-server` – **CRITICAL:** Always kill old processes before starting Expo, environment switching
+- `screen-layout` – **Screen architecture, safe areas, HomeScreen contentWrapper pattern**
 - `react-native-web-patterns` – Platform.OS checks, alerts, web compatibility
 - `supabase-patterns` – DB queries, realtime, GRANT permissions, RLS, error handling
 - `theme-styling` – Theme usage, modal structure, button patterns, themed alert modals
 - `validation-errors` – Input validation, error display
-- `modal-components` – Standard modal layouts
+- `modal-components` – Standard modal layouts, safe area handling for modals
 - `testing-patterns` – Unit tests, E2E tests, mocking, test utilities
 - `local-build` – WSL local builds, unlimited APKs without EAS quota
 
@@ -96,7 +97,7 @@ When debugging auth/permission issues or after policy changes:
 - **Themes**: Use `useTheme()` and `useThemedStyles()` – never hardcode colors
 - **Loading States**: Use `<ThemedLoader />` from `src/components` with cycling messages and 1-second minimum display time
 - **Themed Alerts**: Use custom Modal with theme colors instead of native `Alert.alert` for consistent dark/light mode
-- **Safe Areas**: Use `useSafeAreaInsets()` for screens to avoid status bar/home indicator overlap
+- **Safe Areas**: See `screen-layout` skill – screens in HomeScreen's contentWrapper don't need insets (parent handles it); standalone screens and full-screen modals do
 
 ## Recent Critical Fixes
 - ✅ Auth security: Fixed `secureTextEntry`, removed unsafe password masking
@@ -118,6 +119,9 @@ When debugging auth/permission issues or after policy changes:
 - ✅ Privacy Policy: Added link in Settings screen (Legal section)
 - ✅ Secure logging: All console.log/error replaced with `logger` (PII sanitization, backend-controlled debug)
 - ✅ Error logging: Errors automatically sent to Supabase `error_logs` table (sanitized, no PII)
+- ✅ Layout architecture: HomeScreen uses `NAV_BAR_HEIGHT + insets.bottom` for dynamic content padding
+- ✅ Responsive buttons: Quick score buttons use calculated widths + `maxFontSizeMultiplier` for device consistency
+- ✅ ScreenContainer: Reusable layout wrapper component added to `src/components/`
 
 ## Environments
 

@@ -15,8 +15,8 @@ const IS_PREVIEW_DEV = process.env.APP_ENV === 'preview-dev';
 const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW && !IS_PREVIEW_DEV);
 
 // App version - update this for each release
-const APP_VERSION = '1.0.0';
-const BUILD_NUMBER = 3;
+const APP_VERSION = '1.0.1';
+const BUILD_NUMBER = 4;
 
 // Package identifiers
 const getPackageName = () => {
@@ -27,9 +27,9 @@ const getPackageName = () => {
 };
 
 const getAppName = () => {
-  if (IS_DEV) return '10K Scorekeeper (Dev)';
-  if (IS_PREVIEW_DEV) return '10K Scorekeeper (Preview-Dev)';
-  if (IS_PREVIEW) return '10K Scorekeeper (Preview)';
+  if (IS_DEV) return 'DEV - 10K Scorekeeper';
+  if (IS_PREVIEW_DEV) return 'PREVIEW DEV - 10K Scorekeeper';
+  if (IS_PREVIEW) return 'PREVIEW - 10K Scorekeeper';
   return '10K Scorekeeper';
 };
 
