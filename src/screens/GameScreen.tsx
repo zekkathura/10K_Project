@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState, forwardRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -45,6 +45,8 @@ type CellAction = 'score' | 'edit' | 'delete';
 const DEFAULT_ROWS = 10;
 const MIN_ROUNDS = 5;
 const MAX_ROUNDS = 30;
+const LOAD_DEBOUNCE_MS = 300; // Debounce rapid loadAll calls
+const RECONNECT_DELAY_MS = 2000; // Delay before attempting reconnection
 
 // Cache game data at module level to persist across navigations (keyed by gameId)
 interface GameCache {
@@ -93,8 +95,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(cached?.userId || null);
   const [loadedOnce, setLoadedOnce] = useState(cached !== null); // Already loaded if cached
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
+  const loadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { theme } = useTheme();
   const alert = useThemedAlert();
@@ -168,6 +173,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setLoading(false);
     }
   };
+
+  // Debounced version of loadAll to prevent rapid successive calls from realtime events
+  const debouncedLoadAll = useCallback(() => {
+    if (loadDebounceRef.current) {
+      clearTimeout(loadDebounceRef.current);
+    }
+    loadDebounceRef.current = setTimeout(() => {
+      loadAll();
+      loadDebounceRef.current = null;
+    }, LOAD_DEBOUNCE_MS);
+  }, [gameId]);
 
   const pushGameRefresh = async (reason: string, extra?: { totalRows?: number }): Promise<boolean> => {
     const channel = broadcastChannelRef.current;
@@ -281,7 +297,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               try {
                 await deleteTurn(turn.id, turn.player_id, turn.score, turn.is_bust);
                 await loadAll();
-                pushGameRefresh('score_change');
+                await pushGameRefresh('score_change');
               } catch (err) {
                 logger.error('Failed to delete score', err);
                 alert.show({ title: 'Error', message: 'Failed to delete score' });
@@ -322,7 +338,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         setSelectedRound(null);
         setIsBust(false);
         await loadAll();
-        pushGameRefresh('score_change');
+        await pushGameRefresh('score_change');
       } catch (err) {
         logger.error('Failed to reset score', err);
         alert.show({ title: 'Error', message: 'Failed to reset score' });
@@ -350,7 +366,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setSelectedRound(null);
       setIsBust(false);
       await loadAll();
-      pushGameRefresh('score_change');
+      await pushGameRefresh('score_change');
     } catch (err) {
       logger.error('Failed to save score', err);
       alert.show({ title: 'Error', message: 'Failed to save score' });
@@ -370,7 +386,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             try {
               await deleteRound(gameId, round);
               await loadAll();
-              pushGameRefresh('score_change');
+              await pushGameRefresh('score_change');
             } catch (err) {
               logger.error('Failed to delete round', err);
               alert.show({ title: 'Error', message: 'Failed to delete round' });
@@ -385,7 +401,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await removePlayer(playerId);
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
       logger.error('Error removing player', error);
       alert.show({ title: 'Error', message: 'Failed to remove player' });
@@ -396,7 +412,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await updatePlayerOrder(gameId, ordered.map((p) => p.id));
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
       logger.error('Error updating player order', error);
       alert.show({ title: 'Error', message: 'Failed to update player order' });
@@ -456,7 +472,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await addGuestPlayer(gameId, trimmed);
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error: any) {
       logger.error('Error adding player', error);
       alert.show({ title: 'Error', message: error.message || 'Failed to add player' });
@@ -483,7 +499,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setShowRenameModal(false);
       setRenamePlayer(null);
       setRenameInput('');
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
       logger.error('Error renaming player', error);
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to rename player' });
@@ -494,9 +510,43 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   useEffect(() => {
     let dataChannel: RealtimeChannel | null = null;
     let broadcastChannel: RealtimeChannel | null = null;
+    let isMounted = true;
+
+    const handleConnectionChange = (connected: boolean) => {
+      if (isMounted) {
+        setRealtimeConnected(connected);
+        if (connected) {
+          logger.debug('Realtime connected for game:', gameId);
+        } else {
+          logger.warn('Realtime disconnected for game:', gameId);
+        }
+      }
+    };
+
+    const attemptReconnect = () => {
+      if (!isMounted) return;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (isMounted) {
+          logger.debug('Attempting realtime reconnection for game:', gameId);
+          subscribe();
+        }
+      }, RECONNECT_DELAY_MS);
+    };
 
     const subscribe = async () => {
       try {
+        // Clean up existing channels before resubscribing
+        if (dataChannel) {
+          try { await dataChannel.unsubscribe(); supabase.removeChannel(dataChannel); } catch { /* ignore */ }
+        }
+        if (broadcastChannel) {
+          try { await broadcastChannel.unsubscribe(); supabase.removeChannel(broadcastChannel); } catch { /* ignore */ }
+        }
+
+        // Data channel: listens for Postgres changes (INSERT/UPDATE/DELETE)
         dataChannel = supabase
           .channel(`game-${gameId}-data`)
           .on(
@@ -508,7 +558,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `game_id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           )
           .on(
@@ -520,7 +570,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           )
           .on(
@@ -532,39 +582,67 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `game_id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           );
+
         realtimeChannelRef.current = dataChannel;
         dataChannel.subscribe((status) => {
-          if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            logger.warn('Realtime data subscribe status:', status);
+          if (status === 'SUBSCRIBED') {
+            handleConnectionChange(true);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            logger.warn('Realtime data channel error:', status);
+            handleConnectionChange(false);
+            attemptReconnect();
+          } else if (status === 'CLOSED') {
+            handleConnectionChange(false);
           }
         });
 
+        // Broadcast channel: explicit refresh notifications from other clients
+        // self: false - don't receive our own broadcasts (we already called loadAll locally)
         broadcastChannel = supabase
-          .channel(`game-${gameId}-broadcast`, { config: { broadcast: { self: true, ack: true } } })
+          .channel(`game-${gameId}-broadcast`, { config: { broadcast: { self: false, ack: true } } })
           .on('broadcast', { event: 'game_refresh' }, ({ payload }) => {
+            logger.debug('Received game_refresh broadcast:', payload?.reason);
             const nextRows = payload?.totalRows;
             if (typeof nextRows === 'number') {
               const clamped = Math.min(30, Math.max(5, nextRows));
               setTotalRows(clamped);
             }
-            loadAll();
+            // Use debounced load since postgres_changes might also fire
+            debouncedLoadAll();
           });
+
         broadcastChannelRef.current = broadcastChannel;
         broadcastChannel.subscribe((status) => {
-          if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            logger.warn('Realtime broadcast subscribe status:', status);
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            logger.warn('Realtime broadcast channel error:', status);
+            attemptReconnect();
           }
         });
       } catch (err) {
         logger.warn('Realtime subscribe failed', err);
+        handleConnectionChange(false);
+        attemptReconnect();
       }
     };
 
     subscribe();
+
     return () => {
+      isMounted = false;
+
+      // Clear any pending debounce/reconnect timers
+      if (loadDebounceRef.current) {
+        clearTimeout(loadDebounceRef.current);
+        loadDebounceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       const cleanupChannel = async (channel: RealtimeChannel | null, label: string) => {
         if (!channel) return;
         try {
@@ -584,13 +662,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       realtimeChannelRef.current = null;
       broadcastChannelRef.current = null;
     };
-  }, [gameId]);
+  }, [gameId, debouncedLoadAll]);
 
   const handleDeleteGame = async () => {
     logger.debug('Delete game clicked for gameId:', gameId);
     try {
       await deleteGame(gameId);
-      pushGameRefresh('game_deleted');
+      await pushGameRefresh('game_deleted');
       setShowSettingsModal(false);
       alert.show({ title: 'Game deleted', message: 'This game has been removed.' });
       onGameRemoved?.();
@@ -605,6 +683,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await reopenGame(gameId);
       await loadAll();
+      await pushGameRefresh('game_reopened');
       setShowSettingsModal(false);
       alert.show({ title: 'Game Re-opened', message: 'You can now make changes and finish the game again.' });
     } catch (error) {
@@ -665,7 +744,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await cleanupMissingScores();
       const winningScore = totals[selectedWinnerId] ?? 0;
       await finishGame(gameId, selectedWinnerId, winningScore);
-      pushGameRefresh('game_finished');
+      await pushGameRefresh('game_finished');
       setShowFinishConfirm(false);
       alert.show({ title: 'Game finished', message: 'This game has been marked complete.' });
       onGameRemoved?.();
@@ -959,14 +1038,16 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.resetButton]}
-                onPress={() => {
+                onPress={async () => {
                   if (selectedTurn) {
-                    deleteTurn(selectedTurn.id, selectedTurn.player_id, selectedTurn.score, selectedTurn.is_bust)
-                      .then(loadAll)
-                      .catch((err) => {
-                        logger.error('Failed to reset score', err);
-                        alert.show({ title: 'Error', message: 'Failed to reset score' });
-                      });
+                    try {
+                      await deleteTurn(selectedTurn.id, selectedTurn.player_id, selectedTurn.score, selectedTurn.is_bust);
+                      await loadAll();
+                      await pushGameRefresh('score_change');
+                    } catch (err) {
+                      logger.error('Failed to reset score', err);
+                      alert.show({ title: 'Error', message: 'Failed to reset score' });
+                    }
                   }
                   setShowScoreModal(false);
                   setSelectedPlayer(null);

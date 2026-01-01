@@ -49,6 +49,7 @@ e2e-mobile/screenshots/
 # Local-only files (never commit - contain credentials)
 *.local.md
 supabase-query.js
+check_realtime_publication.js
 *.local.json
 !.claude/settings.local.json
 credentials.json
