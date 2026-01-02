@@ -236,7 +236,8 @@
       "Bash(dir /b \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\*.aab\")",
       "Bash(eas secret:list:*)",
       "Bash(npx eas-cli secret:list)",
-      "Bash(npx eas-cli:*)"
+      "Bash(npx eas-cli:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -16,7 +16,7 @@ const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW 
 
 // App version - update this for each release
 const APP_VERSION = '1.0.6';
-const BUILD_NUMBER = 12;
+const BUILD_NUMBER = 13;
 
 // Package identifiers
 const getPackageName = () => {
@@ -51,12 +51,13 @@ export default {
     },
 
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,  // iPhone only - no iPad screenshots required
       bundleIdentifier: getPackageName(),
       buildNumber: String(BUILD_NUMBER),
       infoPlist: {
         NSCameraUsageDescription: 'This app does not use the camera.',
         NSPhotoLibraryUsageDescription: 'This app does not access photos.',
+        ITSAppUsesNonExemptEncryption: false,  // App only uses HTTPS (exempt encryption)
       },
     },
 
