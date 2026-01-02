@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Alert, View, StyleSheet, TouchableOpacity, Image, Text, Modal, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { Alert, View, StyleSheet, TouchableOpacity, Image, Text, Modal, Platform, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut } from '../lib/auth';
 import GamesListScreen from './GamesListScreen';
@@ -40,6 +40,31 @@ export default function HomeScreen() {
   const styles = useThemedStyles(createStyles);
   const { mode } = useTheme();
   const insets = useSafeAreaInsets();
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // If settings modal is open, close it
+      if (showProfileSettings) {
+        setShowProfileSettings(false);
+        return true; // Handled
+      }
+
+      // If on any tab other than home, go to home
+      if (currentTab !== 'home') {
+        setCurrentTab('home');
+        setViewingGameId(null); // Clear any viewed game
+        return true; // Handled
+      }
+
+      // On home tab - let default behavior (close app) happen
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [currentTab, showProfileSettings]);
 
   // Derived state: are we viewing a game?
   const isViewingGame = viewingGameId !== null;

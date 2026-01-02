@@ -94,7 +94,7 @@ export default function CreateGameScreen({
 
       setAvailablePlayers(sorted.filter((p) => p.id !== currentUserId));
     } catch (error) {
-      logger.error('Error loading users:', error);
+      logger.error('Error loading users:', error, { screen: 'CreateGameScreen', action: 'loadUsers' });
       alert.show({ title: 'Error', message: 'Failed to load users' });
     } finally {
       setLoading(false);
@@ -159,7 +159,7 @@ export default function CreateGameScreen({
         });
 
         if (error) {
-          logger.error('Error adding registered player:', error);
+          logger.error('Error adding registered player:', error, { screen: 'CreateGameScreen', action: 'addRegisteredPlayer', extra: { gameId: game.id, userId } });
           throw error;
         }
       }
@@ -175,7 +175,7 @@ export default function CreateGameScreen({
         });
 
         if (error) {
-          logger.error('Error adding guest player:', error);
+          logger.error('Error adding guest player:', error, { screen: 'CreateGameScreen', action: 'addGuestPlayer', extra: { gameId: game.id, guestName } });
           throw error;
         }
       }
@@ -183,7 +183,7 @@ export default function CreateGameScreen({
       logger.debug('Game creation complete:', game.id);
       onGameCreated(game.id);
     } catch (error: any) {
-      logger.error('Error creating game:', error);
+      logger.error('Error creating game:', error, { screen: 'CreateGameScreen', action: 'createGame', extra: { selectedUserIds: Array.from(selectedUserIds), guestCount: guestPlayers.length } });
       alert.show({ title: 'Error', message: error.message || 'Failed to create game' });
     } finally {
       setCreating(false);

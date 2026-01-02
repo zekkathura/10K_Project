@@ -3,7 +3,7 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2026-01-01
+**Last Verified:** 2026-01-01 (infinite recursion fix applied to both dev and prod)
 **Current Mode:** 🚧 DEVELOPMENT (Permissive policies enabled)
 
 **Note:** This file is maintained for quick reference. For current state, use:
@@ -85,14 +85,12 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 - ✅ `Game creators can add players` - Creators can add guest players
 
 #### UPDATE Policies
-- ✅ `Users can update their own player records` - Users can update own record
-- ✅ `Game creators can update players in their games` - Creators can update any player
-- ✅ `Game participants can update players` - Any player in a game can update player records (reorder)
+- ✅ `Users can update their own player records` - Users can update own record (user_id = auth.uid())
+- ✅ `Game creators can update players in their games` - Creators can update any player (checks games table, no recursion)
 
 #### DELETE Policies
-- ✅ `Users can remove themselves from games` - Users can leave games
-- ✅ `Game creators can remove players from their games` - Creators can remove any player
-- ✅ `Game participants can remove players` - Any player in a game can remove players
+- ✅ `Users can remove themselves from games` - Users can leave games (user_id = auth.uid())
+- ✅ `Game creators can remove players from their games` - Creators can remove any player (checks games table, no recursion)
 
 ---
 
@@ -118,7 +116,14 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 ### ✅ Phase 1: Remove Duplicates (COMPLETED)
 Duplicate policies have been removed.
 
-### Phase 2: Production Security (Before Launch)
+### ✅ Phase 2: Fix Infinite Recursion (COMPLETED 2026-01-01)
+Removed recursive policies that caused "infinite recursion detected" errors:
+- ❌ `Game participants can remove players` - Checked game_players to allow game_players DELETE
+- ❌ `Game participants can update players` - Checked game_players to allow game_players UPDATE
+
+Replaced with non-recursive versions that check `games.created_by_user_id` instead.
+
+### Phase 3: Production Security (Before Launch)
 ```sql
 -- Remove overly permissive policies
 DROP POLICY IF EXISTS "authenticated_all_game_players" ON game_players;

@@ -34,7 +34,7 @@ theme_mode    TEXT
 id                  UUID NOT NULL PK
 created_by_user_id  UUID → profiles.id
 join_code           TEXT NOT NULL UNIQUE (6 chars, A-Z0-9)
-status              TEXT NOT NULL ('active', 'ended', 'complete')
+status              TEXT NOT NULL ('active' or 'ended')
 created_at          TIMESTAMP WITH TIME ZONE
 updated_at          TIMESTAMP WITH TIME ZONE
 finished_at         TIMESTAMP WITH TIME ZONE

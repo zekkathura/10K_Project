@@ -167,7 +167,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         userId: currentUserId,
       });
     } catch (error) {
-      logger.error('Error loading game data', error);
+      logger.error('Error loading game data', error, { screen: 'GameScreen', action: 'loadGameData', extra: { gameId } });
       alert.show({ title: 'Error', message: 'Failed to load game data' });
     } finally {
       setLoading(false);
@@ -299,7 +299,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                 await loadAll();
                 await pushGameRefresh('score_change');
               } catch (err) {
-                logger.error('Failed to delete score', err);
+                logger.error('Failed to delete score', err, { screen: 'GameScreen', action: 'deleteScore', extra: { gameId, turnId: turn.id, playerId: turn.player_id } });
                 alert.show({ title: 'Error', message: 'Failed to delete score' });
               }
             },
@@ -340,7 +340,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         await loadAll();
         await pushGameRefresh('score_change');
       } catch (err) {
-        logger.error('Failed to reset score', err);
+        logger.error('Failed to reset score', err, { screen: 'GameScreen', action: 'resetScore', extra: { gameId, turnId: selectedTurn.id, playerId: selectedPlayer.id, round: selectedRound } });
         alert.show({ title: 'Error', message: 'Failed to reset score' });
       }
       return;
@@ -368,7 +368,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       await pushGameRefresh('score_change');
     } catch (err) {
-      logger.error('Failed to save score', err);
+      logger.error('Failed to save score', err, { screen: 'GameScreen', action: 'saveScore', extra: { gameId, playerId: selectedPlayer.id, round: selectedRound, isUpdate: !!selectedTurn } });
       alert.show({ title: 'Error', message: 'Failed to save score' });
     }
   };
@@ -388,7 +388,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               await loadAll();
               await pushGameRefresh('score_change');
             } catch (err) {
-              logger.error('Failed to delete round', err);
+              logger.error('Failed to delete round', err, { screen: 'GameScreen', action: 'deleteRound', extra: { gameId, round } });
               alert.show({ title: 'Error', message: 'Failed to delete round' });
             }
           },
@@ -403,7 +403,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error removing player', error);
+      logger.error('Error removing player', error, { screen: 'GameScreen', action: 'removePlayer', extra: { gameId, playerId } });
       alert.show({ title: 'Error', message: 'Failed to remove player' });
     }
   };
@@ -414,7 +414,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error updating player order', error);
+      logger.error('Error updating player order', error, { screen: 'GameScreen', action: 'reorderPlayers', extra: { gameId } });
       alert.show({ title: 'Error', message: 'Failed to update player order' });
     }
   };
@@ -452,7 +452,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await updateGameRounds(gameId, clamped);
       setTotalRows(clamped);
     } catch (err) {
-      logger.error('Failed to update rounds', err);
+      logger.error('Failed to update rounds', err, { screen: 'GameScreen', action: 'updateRounds', extra: { gameId, targetRounds: clamped } });
       alert.show({ title: 'Error', message: 'Could not update rounds. Please try again.' });
       return false;
     }
@@ -474,7 +474,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await loadAll();
       await pushGameRefresh('player_change');
     } catch (error: any) {
-      logger.error('Error adding player', error);
+      logger.error('Error adding player', error, { screen: 'GameScreen', action: 'addPlayer', extra: { gameId, playerName: trimmed } });
       alert.show({ title: 'Error', message: error.message || 'Failed to add player' });
     }
   };
@@ -501,7 +501,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setRenameInput('');
       await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error renaming player', error);
+      logger.error('Error renaming player', error, { screen: 'GameScreen', action: 'renamePlayer', extra: { gameId, playerId: renamePlayer.id, newName: trimmed } });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to rename player' });
     }
   };
@@ -673,8 +673,12 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       alert.show({ title: 'Game deleted', message: 'This game has been removed.' });
       onGameRemoved?.();
       onBack();
-    } catch (error) {
-      logger.error('Error deleting game', error);
+    } catch (error: any) {
+      logger.error('Error deleting game', error, {
+        screen: 'GameScreen',
+        action: 'deleteGame',
+        extra: { gameId, step: error?.step, originalCode: error?.originalError?.code }
+      });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to delete game' });
     }
   };
@@ -687,7 +691,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setShowSettingsModal(false);
       alert.show({ title: 'Game Re-opened', message: 'You can now make changes and finish the game again.' });
     } catch (error) {
-      logger.error('Error reopening game', error);
+      logger.error('Error reopening game', error, { screen: 'GameScreen', action: 'reopenGame', extra: { gameId } });
       const message = error instanceof Error ? error.message : 'Failed to re-open game';
       alert.show({ title: 'Error', message });
     }
@@ -750,7 +754,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       onGameRemoved?.();
       onBack();
     } catch (error) {
-      logger.error('Error finishing game', error);
+      logger.error('Error finishing game', error, { screen: 'GameScreen', action: 'finishGame', extra: { gameId, selectedWinnerId } });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to finish game' });
     } finally {
       setFinishing(false);
@@ -1045,7 +1049,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                       await loadAll();
                       await pushGameRefresh('score_change');
                     } catch (err) {
-                      logger.error('Failed to reset score', err);
+                      logger.error('Failed to reset score', err, { screen: 'GameScreen', action: 'resetScoreModal', extra: { gameId, turnId: selectedTurn.id, playerId: selectedTurn.player_id } });
                       alert.show({ title: 'Error', message: 'Failed to reset score' });
                     }
                   }
@@ -1161,8 +1165,14 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       />
 
       <Modal visible={showFinishConfirm} transparent animationType="fade" onRequestClose={() => setShowFinishConfirm(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[
+          styles.modalOverlay,
+          {
+            paddingTop: Math.max(20, insets.top + 10),
+            paddingBottom: Math.max(20, insets.bottom + 10),
+          }
+        ]}>
+          <View style={[styles.modalContent, styles.verifyModalContent]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Verify scores</Text>
               <TouchableOpacity
@@ -1381,6 +1391,9 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       maxWidth: 420,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    verifyModalContent: {
+      maxHeight: '100%',
     },
     modalTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
     modalSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 12 },

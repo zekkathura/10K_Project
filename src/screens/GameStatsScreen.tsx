@@ -214,8 +214,10 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         .eq('user_id', userId);
 
       const userEntries = myGamePlayers || [];
-      // Only count completed games for stats
-      const completedEntries = userEntries.filter(entry => entry.game?.status === 'ended');
+      // Only count completed games for stats (check both 'ended' and legacy 'complete')
+      const completedEntries = userEntries.filter(entry =>
+        entry.game?.status === 'ended' || entry.game?.status === 'complete'
+      );
       const completedGamesCount = completedEntries.length;
       const endedGameIds = completedEntries.map(entry => entry.game_id);
       // Player IDs only from completed games (for filtering turns)
@@ -672,19 +674,19 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
               ) : (
                 <>
                   <View style={styles.listHeaderRow}>
-                    <Text style={styles.listHeaderRank}>#</Text>
-                    <Text style={styles.listHeaderName}>Player</Text>
-                    <Text style={styles.listHeaderScore}>Avg Score</Text>
+                    <Text style={styles.listHeaderRank} maxFontSizeMultiplier={1.2}>#</Text>
+                    <Text style={styles.listHeaderName} maxFontSizeMultiplier={1.2}>Player</Text>
+                    <Text style={styles.listHeaderScore} maxFontSizeMultiplier={1.2}>Avg Score</Text>
                   </View>
-                  <ScrollView style={styles.playersList} nestedScrollEnabled>
+                  <ScrollView style={styles.playersList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {sortedPlayers.map((player, index) => (
                       <View key={player.name + index} style={styles.listRow}>
-                        <Text style={styles.listRank}>{index + 1}</Text>
+                        <Text style={styles.listRank} maxFontSizeMultiplier={1.2}>{index + 1}</Text>
                         <View style={styles.listContent}>
-                          <Text style={styles.listName}>{player.name}</Text>
-                          <Text style={styles.listSubtext}>{player.games} games</Text>
+                          <Text style={styles.listName} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.2}>{player.name}</Text>
+                          <Text style={styles.listSubtext} maxFontSizeMultiplier={1.2}>{player.games} games</Text>
                         </View>
-                        <Text style={styles.listAvgScore}>{player.avgScore}</Text>
+                        <Text style={styles.listAvgScore} maxFontSizeMultiplier={1.2}>{player.avgScore}</Text>
                       </View>
                     ))}
                   </ScrollView>
@@ -958,7 +960,7 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 12,
       fontWeight: '600',
       color: colors.textTertiary,
-      width: 24,
+      minWidth: 28,
       textTransform: 'uppercase',
     },
     listHeaderName: {
@@ -973,7 +975,7 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 12,
       fontWeight: '600',
       color: colors.textTertiary,
-      minWidth: 70,
+      minWidth: 80,
       textAlign: 'right',
       textTransform: 'uppercase',
     },
@@ -999,12 +1001,13 @@ const createStyles = ({ colors }: Theme) =>
       color: colors.buttonText,
     },
     playersList: {
-      maxHeight: 300,
+      maxHeight: 280,
+      flexGrow: 0,
     },
     listRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 8,
+      paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
@@ -1012,11 +1015,12 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 16,
       fontWeight: '700',
       color: colors.accent,
-      width: 24,
+      minWidth: 28,
     },
     listContent: {
       marginLeft: 10,
       flex: 1,
+      flexShrink: 1,
     },
     listName: {
       fontSize: 15,
@@ -1031,7 +1035,7 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 15,
       fontWeight: '600',
       color: colors.textPrimary,
-      minWidth: 50,
+      minWidth: 80,
       textAlign: 'right',
     },
     emptyText: {

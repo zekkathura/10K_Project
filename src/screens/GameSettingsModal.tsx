@@ -91,7 +91,7 @@ export default function GameSettingsModal({
         styles.overlay,
         {
           paddingTop: Math.max(20, insets.top + 10),
-          paddingBottom: Math.max(20, insets.bottom + 10),
+          paddingBottom: Math.max(30, insets.bottom + 20),
           paddingLeft: Math.max(20, insets.left),
           paddingRight: Math.max(20, insets.right),
         }
@@ -519,6 +519,7 @@ const createStyles = ({ colors }: Theme) =>
       maxWidth: 420,
       maxHeight: '100%', // Respects the safe area padding from overlay
       padding: 20,
+      paddingBottom: 24, // Extra bottom padding for gesture area
       borderWidth: 1,
       borderColor: colors.border,
       shadowColor: colors.textPrimary,

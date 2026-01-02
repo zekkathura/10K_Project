@@ -473,7 +473,7 @@ describe('finishGame', () => {
   it('finishes game with winner info', async () => {
     const gameId = generateUUID();
     const winnerId = generateUUID();
-    const mockGame = createMockGame({ id: gameId, status: 'complete' });
+    const mockGame = createMockGame({ id: gameId, status: 'ended' });
 
     const chainMock = createChainableMock({ data: mockGame, error: null });
     mockSupabaseClient.from.mockReturnValue(chainMock);
@@ -481,7 +481,7 @@ describe('finishGame', () => {
     const result = await finishGame(gameId, winnerId, 10500);
 
     expect(chainMock.update).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'complete',
+      status: 'ended',
       winning_player_id: winnerId,
       winning_score: 10500,
     }));
@@ -490,7 +490,7 @@ describe('finishGame', () => {
 
   it('finishes game without winner', async () => {
     const gameId = generateUUID();
-    const mockGame = createMockGame({ id: gameId, status: 'complete' });
+    const mockGame = createMockGame({ id: gameId, status: 'ended' });
 
     const chainMock = createChainableMock({ data: mockGame, error: null });
     mockSupabaseClient.from.mockReturnValue(chainMock);
@@ -503,30 +503,14 @@ describe('finishGame', () => {
     }));
   });
 
-  it('falls back to "ended" status on error', async () => {
+  it('throws on database error', async () => {
     const gameId = generateUUID();
-    const mockGame = createMockGame({ id: gameId, status: 'ended' });
+    const dbError = new Error('Database error');
 
-    // First call fails, second succeeds with 'ended'
-    let callCount = 0;
-    const chainMock: any = {};
-    ['select', 'update', 'eq'].forEach(m => {
-      chainMock[m] = jest.fn().mockReturnValue(chainMock);
-    });
-    chainMock.maybeSingle = jest.fn().mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) {
-        return Promise.resolve({ data: null, error: new Error('invalid status') });
-      }
-      return Promise.resolve({ data: mockGame, error: null });
-    });
-
+    const chainMock = createChainableMock({ data: null, error: dbError });
     mockSupabaseClient.from.mockReturnValue(chainMock);
 
-    const result = await finishGame(gameId);
-
-    expect(chainMock.update).toHaveBeenCalledTimes(2);
-    expect(result.status).toBe('ended');
+    await expect(finishGame(gameId)).rejects.toThrow('Database error');
   });
 });
 
