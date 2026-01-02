@@ -22,6 +22,7 @@ interface ExtraRule {
 
 type RulesTab = 'normal' | 'extra';
 type SectionKey = 'scoring' | 'winCondition' | 'turnOrder' | 'standardRound' | 'example';
+type SortOption = 'rule_number' | 'proposer' | 'date';
 
 // Scoring data for native table
 const SCORING_DATA = {
@@ -54,6 +55,7 @@ export default function RulesScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<SectionKey>>(new Set(['scoring']));
+  const [sortBy, setSortBy] = useState<SortOption>('rule_number');
 
   const toggleSection = (section: SectionKey) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -197,6 +199,28 @@ export default function RulesScreen() {
     }
   };
 
+  // Sort rules based on selected option
+  const getSortedRules = () => {
+    const rulesCopy = [...extraRules];
+    switch (sortBy) {
+      case 'proposer':
+        return rulesCopy.sort((a, b) => {
+          const aProposer = a.proposer || '';
+          const bProposer = b.proposer || '';
+          return aProposer.localeCompare(bProposer);
+        });
+      case 'date':
+        return rulesCopy.sort((a, b) => {
+          const aDate = a.rule_date || '';
+          const bDate = b.rule_date || '';
+          return bDate.localeCompare(aDate); // Most recent first
+        });
+      case 'rule_number':
+      default:
+        return rulesCopy.sort((a, b) => a.rule_number - b.rule_number);
+    }
+  };
+
   const renderNormalRules = () => (
     <View style={styles.section}>
       {/* Scoring - Most accessed, expanded by default */}
@@ -314,9 +338,41 @@ export default function RulesScreen() {
     // Calculate stats
     const activeCount = extraRules.filter(r => !r.revoked_by).length;
     const revokedCount = extraRules.filter(r => !!r.revoked_by).length;
+    const sortedRules = getSortedRules();
 
     return (
       <View style={styles.extraRulesContainer}>
+        {/* Sort Filters */}
+        <View style={styles.filterContainer}>
+          <Text style={styles.filterLabel}>Sort by:</Text>
+          <View style={styles.filterButtons}>
+            <TouchableOpacity
+              style={[styles.filterButton, sortBy === 'rule_number' && styles.filterButtonActive]}
+              onPress={() => setSortBy('rule_number')}
+            >
+              <Text style={[styles.filterButtonText, sortBy === 'rule_number' && styles.filterButtonTextActive]}>
+                Rule #
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, sortBy === 'proposer' && styles.filterButtonActive]}
+              onPress={() => setSortBy('proposer')}
+            >
+              <Text style={[styles.filterButtonText, sortBy === 'proposer' && styles.filterButtonTextActive]}>
+                Proposer
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, sortBy === 'date' && styles.filterButtonActive]}
+              onPress={() => setSortBy('date')}
+            >
+              <Text style={[styles.filterButtonText, sortBy === 'date' && styles.filterButtonTextActive]}>
+                Date
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Stats Summary */}
         <View style={styles.statsSummary}>
           <Text style={styles.statsSummaryText}>
@@ -325,20 +381,8 @@ export default function RulesScreen() {
         </View>
 
         {/* Rules List */}
-        {extraRules.map((rule) => {
+        {sortedRules.map((rule) => {
           const isRevoked = !!rule.revoked_by;
-          // Build metadata line with context
-          const metaParts: string[] = [];
-          if (rule.proposer) {
-            metaParts.push(`Proposed by ${rule.proposer}`);
-          }
-          if (rule.approved_by) {
-            metaParts.push(`approved by ${rule.approved_by}`);
-          }
-          if (rule.rule_date) {
-            metaParts.push(formatDate(rule.rule_date) || '');
-          }
-          const metaLine = metaParts.length > 0 ? metaParts.join(' • ') : 'No details available';
 
           return (
             <View
@@ -360,7 +404,17 @@ export default function RulesScreen() {
                 {rule.text}
               </Text>
               <View style={styles.ruleMeta}>
-                <Text style={styles.ruleMetaText}>{metaLine}</Text>
+                {rule.proposer && (
+                  <Text style={styles.ruleMetaProposer}>Proposed by {rule.proposer}</Text>
+                )}
+                {rule.approved_by && (
+                  <Text style={styles.ruleMetaApproved}>Approved by {rule.approved_by}</Text>
+                )}
+                {rule.rule_date && (
+                  <Text style={styles.ruleMetaEffective}>
+                    Effective {formatDate(rule.rule_date)}
+                  </Text>
+                )}
                 {rule.revoked_by && (
                   <Text style={styles.ruleMetaTextRevoked}>
                     Revoked by {rule.revoked_by}
@@ -702,13 +756,64 @@ const createStyles = ({ colors }: Theme) =>
       paddingTop: 8,
       gap: 4,
     },
-    ruleMetaText: {
+    ruleMetaProposer: {
       fontSize: 12,
-      color: colors.textTertiary,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+    ruleMetaApproved: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: colors.accentPurple,
+    },
+    ruleMetaEffective: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: colors.success,
     },
     ruleMetaTextRevoked: {
       fontSize: 12,
       color: colors.error,
+    },
+
+    // Filter UI
+    filterContainer: {
+      backgroundColor: colors.surface,
+      borderRadius: 10,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    filterLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      marginBottom: 8,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    filterButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    filterButton: {
+      flex: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: 'center',
+    },
+    filterButtonActive: {
+      backgroundColor: colors.accent,
+    },
+    filterButtonText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    filterButtonTextActive: {
+      color: colors.buttonText,
     },
 
     // Loading/Error/Empty states

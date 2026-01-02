@@ -226,7 +226,17 @@
       "Bash(wsl -d Ubuntu -e bash -c \"export ANDROID_HOME=/home/blink/android-sdk && export ANDROID_SDK_ROOT=/home/blink/android-sdk && export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && export PATH=/home/blink/android-sdk/cmdline-tools/latest/bin:/home/blink/android-sdk/platform-tools:/usr/local/bin:/usr/bin:/bin && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas-cli build --profile development --platform android --local --output ./build/10k-dev-v1.0.1-b4.apk --non-interactive 2>&1\")",
       "Bash(node check_migration.js:*)",
       "Bash(node supabase-query.js:*)",
-      "Bash(node debug_connection.js:*)"
+      "Bash(node debug_connection.js:*)",
+      "Bash(node -e \"\nconst { createClient } = require\\(''@supabase/supabase-js''\\);\nconst PROD_URL = ''https://kpzczvjazzinnugzluhj.supabase.co'';\nconst PROD_KEY = ''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwemN6dmphenppbm51Z3psdWhqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAwMjQ4MCwiZXhwIjoyMDgwNTc4NDgwfQ.S2pi0Mm2Bccsw3mbO5a2t9Ad0f9LwztnS34fry1YFiU'';\n\nconst client = createClient\\(PROD_URL, PROD_KEY\\);\n\n// Check if tables are in the realtime publication\nclient.rpc\\(''pg_publication_tables'', {}\\).then\\(r => {\n  console.log\\(''pg_publication_tables:'', r\\);\n}\\).catch\\(\\(\\) => {\n  // Fall back to direct query\n  console.log\\(''RPC not available, checking via information schema...''\\);\n}\\);\n\n// Also check realtime settings\nclient.from\\(''pg_publication_tables''\\).select\\(''*''\\).then\\(r => {\n  console.log\\(''Direct query:'', r\\);\n}\\).catch\\(e => console.log\\(''Query error:'', e.message\\)\\);\n\")",
+      "Bash(node check_realtime_publication.js:*)",
+      "Bash(npx eas build:*)",
+      "Bash(wsl -e bash -c \"cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev.apk --non-interactive\":*)",
+      "Bash(dir /b \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\")",
+      "Bash(powershell:*)",
+      "Bash(dir /b \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\*.aab\")",
+      "Bash(eas secret:list:*)",
+      "Bash(npx eas-cli secret:list)",
+      "Bash(npx eas-cli:*)"
     ],
     "deny": [],
     "ask": []

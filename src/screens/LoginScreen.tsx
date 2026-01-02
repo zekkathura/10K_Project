@@ -566,6 +566,18 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
               />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.appleButton, styles.appleButtonDisabled]}
+              onPress={() => showAlert('Coming Soon', 'Apple Sign In will be available in a future update.')}
+              disabled={false}
+              accessibilityLabel="Continue with Apple - Coming soon"
+              accessibilityRole="button"
+            >
+              <Text style={styles.appleLogo}></Text>
+              <Text style={styles.appleButtonText}>Continue with Apple</Text>
+              <Text style={styles.comingSoonBadge}>Coming Soon</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -867,6 +879,36 @@ const createStyles = ({ colors, mode }: Theme) =>
       color: colors.textPrimary,
       fontSize: 13,
       fontWeight: '600',
+    },
+    appleButton: {
+      backgroundColor: 'transparent',
+      paddingVertical: 10,
+      borderRadius: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.border,
+      marginTop: 10,
+    },
+    appleButtonDisabled: {
+      opacity: 0.5,
+    },
+    appleLogo: {
+      fontSize: 18,
+      color: colors.textPrimary,
+      marginRight: 8,
+    },
+    appleButtonText: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    comingSoonBadge: {
+      fontSize: 10,
+      color: colors.textTertiary,
+      marginLeft: 8,
+      fontStyle: 'italic',
     },
     loadingRow: {
       flexDirection: 'row',

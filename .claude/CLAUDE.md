@@ -8,6 +8,7 @@ Expo SDK 54 (React Native Web) + TypeScript + Supabase (Postgres/Auth/Realtime)
 ## Authentication
 - **Email/password** (secure: `secureTextEntry`, Platform-aware alerts)
 - **Google OAuth** (web + mobile)
+- **Apple Sign In** (iOS only - "Coming Soon" placeholder in UI, pending Apple Developer enrollment)
 - **No guest login** – users must create accounts; guest players added within games
 
 ## Core Architecture
@@ -43,7 +44,8 @@ When debugging auth/permission issues or after policy changes:
 - `src/lib/validation.ts` – input validators (always use before DB ops)
 - `src/lib/theme.ts` – dark/light theme system
 - `src/lib/logger.ts` – secure logging with PII sanitization and backend-controlled debug mode
-- `src/lib/versionCheck.ts` – app version checking against backend requirements
+- `src/lib/versionCheck.ts` – app version checking, force update modal, platform-specific store URLs
+- `src/lib/useNetwork.ts` – network connectivity hook (offline detection, blocks app when offline)
 - `src/screens/GameScreen.tsx` – main game logic, realtime sync
 
 **Auth Utilities** (centralized authentication logic):
@@ -99,7 +101,30 @@ When debugging auth/permission issues or after policy changes:
 - **Themed Alerts**: Use custom Modal with theme colors instead of native `Alert.alert` for consistent dark/light mode
 - **Safe Areas**: See `screen-layout` skill – screens in HomeScreen's contentWrapper don't need insets (parent handles it); standalone screens and full-screen modals do
 
+## Supabase Credential Selection (CRITICAL)
+
+**How credentials are selected** (see `src/lib/supabase.ts`):
+
+The app uses **hardcoded credentials** based on the `APP_ENV` value baked into the build:
+
+1. `eas.json` sets `APP_ENV` for each build profile (production, preview, preview-dev, development)
+2. `app.config.js` reads `APP_ENV` and exposes it as `Constants.expoConfig.extra.environment`
+3. `supabase.ts` checks this value at runtime and selects credentials:
+   - `production` or `preview` → **10k-prod** (hardcoded prod credentials)
+   - `development` or `preview-dev` → **10k-dev** (hardcoded dev credentials)
+
+**Why hardcoded?** EAS environment variables (`${PROD_SUPABASE_URL}`) weren't reliably injected into local builds. Hardcoding ensures production builds ALWAYS connect to production.
+
+**NEVER fall back to dev in production** - If something fails, it should fail loudly, not silently connect to dev.
+
+**Anon keys are safe in client code** - They're public keys protected by Row-Level Security (RLS).
+
 ## Recent Critical Fixes
+- ✅ Credential selection: Hardcoded prod/dev credentials based on APP_ENV (no fallback to dev in prod)
+- ✅ Offline detection: Added useNetwork hook + OfflineModal to block app when offline
+- ✅ iOS App Store URL: versionCheck.ts now returns platform-specific store URLs (Google Play vs App Store)
+- ✅ Apple Sign In UI: Button added to LoginScreen with "Coming Soon" badge (implementation pending Apple Developer)
+- ✅ Settings safe area: Fixed bottom padding for gesture navigation on modern phones
 - ✅ Auth security: Fixed `secureTextEntry`, removed unsafe password masking
 - ✅ Round removal: Validates scores exist before allowing round reduction
 - ✅ Platform compatibility: All alerts work on web + mobile
@@ -147,49 +172,56 @@ When debugging auth/permission issues or after policy changes:
 
 **Configured Secrets:** `DEV_SUPABASE_URL`, `DEV_SUPABASE_ANON_KEY`, `PROD_SUPABASE_URL`, `PROD_SUPABASE_ANON_KEY`
 
+**Current Version:** `1.0.4` (build 9) - Update in `app.config.js`
+
 **Build Profiles:**
 | Profile | App ID | Supabase | Use Case |
 |---------|--------|----------|----------|
 | `development` | `com.tenk.scorekeeper.dev` | 10k-dev | Local dev (requires dev server) |
 | `preview-dev` | `com.tenk.scorekeeper.previewdev` | 10k-dev | **E2E testing** (standalone APK) |
 | `preview` | `com.tenk.scorekeeper.preview` | 10k-prod | Internal testing |
-| `production` | `com.tenk.scorekeeper` | 10k-prod | App Store release |
+| `production` | `com.tenk.scorekeeper` | 10k-prod | Google Play / App Store release |
 
-**Build Commands (EAS Cloud):**
+**⚠️ CRITICAL: Android Builds = LOCAL ONLY (WSL)**
+
+**NEVER use EAS cloud builds for Android.** All Android builds MUST use local WSL builds:
+- EAS cloud builds are reserved exclusively for iOS/Apple publishing
+- Android local builds are unlimited (no quota)
+- This is a firm project policy
+
+**Build Commands (LOCAL via WSL - Required for Android):**
 ```bash
-eas build --profile preview-dev --platform android  # E2E testing APK (uses dev Supabase)
-eas build --profile preview --platform android      # Sideloadable APK (uses prod Supabase)
-eas build --profile production --platform android   # Google Play AAB
+# All Android builds use WSL local builds with Windows Android SDK
+wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/Android/Sdk && export ANDROID_SDK_ROOT=/mnt/c/Users/blink/AppData/Local/Android/Sdk && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas-cli build --profile production --platform android --local --output ./build/10k-production-v1.0.4-b9.aab --non-interactive"
 ```
 
-**Note:** Android only - no iOS App Store release planned.
-
-**⚠️ PRODUCTION RELEASE REQUIREMENT:**
-For official Google Play releases, **use EAS cloud builds** (not local builds):
+**iOS Builds (EAS Cloud - Required):**
 ```bash
-eas build --profile production --platform android   # Cloud build - includes mapping files
+# iOS requires macOS, so must use EAS cloud builds
+eas build --profile production --platform ios
 ```
-Cloud builds automatically include R8/ProGuard deobfuscation mapping files, which Google Play needs to provide readable crash reports. Local builds (`--local`) do NOT include these files and will show a warning in Google Play Console. Internal testing can use local builds, but production releases should use cloud builds.
+**Note:** iOS App Store publishing pending Apple Developer Program enrollment.
 
 **Local Builds (WSL - Unlimited, No Quota):**
 ```bash
 # From WSL terminal (or Claude Code can trigger automatically)
 cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
-eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev.apk
+eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev-v1.0.1-b5.apk
 ```
 - **No EAS quota limits** - builds run locally in WSL
-- **Output**: `build/` directory
+- **Output**: `build/` directory with versioned filenames
 - **See skill**: `.claude/skills/local-build/SKILL.md` for full documentation
 
-**Pre-built Files in `build/` Directory:**
-- `build/10k-preview-dev.apk` - Standalone APK (10k-dev Supabase, no dev server needed)
-- `build/10k-dev.apk` - Development APK (requires Metro dev server running)
-- `build/10k-production-v{VERSION}-b{BUILD}.aab` - Production AAB for Google Play
+**Current Build Artifacts in `build/` Directory:**
+- `build/10k-production-v1.0.4-b9.aab` - **Latest production AAB** (Google Play ready)
+- `build/10k-preview-dev-v1.0.1-b5.apk` - Standalone APK (10k-dev Supabase)
+- `build/10k-dev-v1.0.1-b4.apk` - Development APK (requires Metro)
+- `build/archive/` - Old builds
 
-**AAB Naming Convention:**
-- Format: `10k-production-v{APP_VERSION}-b{BUILD_NUMBER}.aab`
-- Example: `10k-production-v1.0.1-b4.aab`
-- Old AABs archived to `build/archive/`
+**Build Naming Convention:**
+- Format: `10k-{profile}-v{APP_VERSION}-b{BUILD_NUMBER}.{ext}`
+- Example: `10k-preview-dev-v1.0.1-b4.apk`
+- Old builds archived to `build/archive/`
 
 **⚠️ REQUIRED: Production Build Workflow:**
 Before building a new AAB, Claude Code MUST:
@@ -244,6 +276,23 @@ git checkout -b [new-branch]
 
 **Never commit**: `.env*`, `.expo/`, `*.log`, `temp_*`, `nul` (already in .gitignore)
 
+## App Store Status
+
+**Google Play Store:** ✅ Active
+- App published and available
+- AAB builds via local WSL
+- Upload to Google Play Console manually
+
+**Apple App Store:** ⏳ Pending Setup
+- Apple Developer Program enrollment in progress
+- Apple Sign In button shows "Coming Soon" in app
+- Once enrolled, need to:
+  1. Create app in App Store Connect
+  2. Configure `eas.json` with Apple credentials
+  3. Update `APP_STORE_ID` in `src/lib/versionCheck.ts`
+  4. Build iOS via EAS cloud: `eas build --profile production --platform ios`
+  5. Submit to App Store
+
 ## Privacy Policy & Store Listing
 
 **Privacy Policy:**
@@ -253,7 +302,7 @@ git checkout -b [new-branch]
 
 **Store Listing:**
 - **Reference file**: `docs/store-description.md` (app store copy)
-- **Workflow**: Edit file → manually copy to Google Play Console
+- **Workflow**: Edit file → manually copy to Google Play Console / App Store Connect
 
 **When to update privacy policy:**
 - Adding new data collection (error logs, analytics, etc.)

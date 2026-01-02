@@ -19,6 +19,7 @@
 | | divider | `#D7DFEB` | Section dividers |
 | **Accents** | accent | `#4A78FF` | Primary buttons, links, focus |
 | | accentLight | `#90A9FF` | Focus rings, highlights |
+| | accentPurple | `#9B59B6` | Special highlights (effective dates) |
 | **Status** | error | `#FF4444` | Error text, icons |
 | | errorBackground | `#FFE8E8` | Error alerts |
 | | success | `#4CAF50` | Success text, icons |
@@ -41,12 +42,13 @@
 | | surface | `#11141F` | Cards, elevated surfaces |
 | | surfaceSecondary | `#24344D` | Secondary surfaces, footers |
 | **Text** | textPrimary | `#FFFFFF` | Main text, headings |
-| | textSecondary | `#FFFFFF` | Subtitles, labels |
-| | textTertiary | `#D99CE3` | Muted text, hints (purple tint) |
+| | textSecondary | `#9CA3AF` | Subtitles, labels |
+| | textTertiary | `#6B7280` | Muted text, hints |
 | **Borders** | border | `#24344D` | Input borders, dividers |
 | | divider | `#24344D` | Section dividers |
 | **Accents** | accent | `#4A78FF` | Primary buttons, links, focus |
 | | accentLight | `#90A9FF` | Focus rings, highlights |
+| | accentPurple | `#D99CE3` | Special highlights (effective dates, light purple) |
 | **Status** | error | `#FF4444` | Error text, icons |
 | | errorBackground | `#2c090c` | Error alerts (dark red) |
 | | success | `#4CAF50` | Success text, icons |
