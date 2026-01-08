@@ -88,6 +88,7 @@ When debugging auth/permission issues or after policy changes:
 - `modal-components` – Standard modal layouts, safe area handling for modals
 - `testing-patterns` – Unit tests, E2E tests, mocking, test utilities
 - `local-build` – WSL local builds, unlimited APKs without EAS quota
+- `git-workflow` – Versioning, branching, commit messages, push workflow
 
 **Why:** Skills load on-demand, reducing context. They contain all implementation patterns.
 

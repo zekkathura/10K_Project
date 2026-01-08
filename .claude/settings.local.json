@@ -250,7 +250,9 @@
       "Bash(ls -la \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\"\" 2>/dev/null || dir \"c:UsersblinkDocuments10K10k-scorekeeperbuild \")",
       "Bash(powershell -Command \"Move-Item -Path ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\10k-production-v1.0.6-b12.aab'' -Destination ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\archive\\\\'' -ErrorAction SilentlyContinue; Write-Host ''Archive step complete''\")",
       "Bash(powershell -Command \"Get-ChildItem -Path ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\'' -Filter ''*.aab'' | Select-Object Name, Length, LastWriteTime\")",
-      "Bash(npx eas-cli submit --platform ios --latest --non-interactive)"
+      "Bash(npx eas-cli submit --platform ios --latest --non-interactive)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nrelease/v1.0.8: Build 15 - iOS App Store updates, new skills\n\n- Add app-store-connect and google-play-publishing skills\n- Add troubleshooting skill for common issues\n- Add iPhone screenshots for App Store\n- Add Apple JWT generation script\n- Update auth, database, and screen components\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: Add git-workflow skill for versioning and push workflow\n\n- Document branch structure \\(main, release/*, feature/*, fix/*\\)\n- Add versioning guidelines \\(APP_VERSION, BUILD_NUMBER\\)\n- Include commit message format and types\n- Add release workflow and common commands\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []
