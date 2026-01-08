@@ -54,3 +54,7 @@ check_realtime_publication.js
 !.claude/settings.local.json
 credentials.json
 google-play-service-account.json
+
+# Apple Sign In keys (private keys - NEVER commit!)
+*.p8
+secrets/

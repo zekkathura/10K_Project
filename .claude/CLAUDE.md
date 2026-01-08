@@ -198,15 +198,15 @@ wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/A
 **iOS Builds (EAS Cloud - Required):**
 ```bash
 # iOS requires macOS, so must use EAS cloud builds
-eas build --profile production --platform ios
+# IMPORTANT: Use "npx eas-cli" (not just "eas") to avoid "command not found"
+npx eas-cli build --profile production --platform ios --non-interactive
 ```
-**Note:** iOS App Store publishing pending Apple Developer Program enrollment.
 
 **Local Builds (WSL - Unlimited, No Quota):**
 ```bash
 # From WSL terminal (or Claude Code can trigger automatically)
 cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
-eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev-v1.0.1-b5.apk
+npx eas-cli build --profile preview-dev --platform android --local --output ./build/10k-preview-dev-v1.0.1-b5.apk
 ```
 - **No EAS quota limits** - builds run locally in WSL
 - **Output**: `build/` directory with versioned filenames
@@ -283,15 +283,12 @@ git checkout -b [new-branch]
 - AAB builds via local WSL
 - Upload to Google Play Console manually
 
-**Apple App Store:** ⏳ Pending Setup
-- Apple Developer Program enrollment in progress
-- Apple Sign In button shows "Coming Soon" in app
-- Once enrolled, need to:
-  1. Create app in App Store Connect
-  2. Configure `eas.json` with Apple credentials
-  3. Update `APP_STORE_ID` in `src/lib/versionCheck.ts`
-  4. Build iOS via EAS cloud: `eas build --profile production --platform ios`
-  5. Submit to App Store
+**Apple App Store:** ✅ Active (In Review)
+- Apple Developer Program enrolled
+- Apple Sign In implemented and functional
+- App submitted for review
+- Build iOS: `npx eas-cli build --profile production --platform ios --non-interactive`
+- Submit to TestFlight: `npx eas-cli submit --platform ios --latest`
 
 ## Privacy Policy & Store Listing
 

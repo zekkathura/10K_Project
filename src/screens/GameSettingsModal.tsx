@@ -159,6 +159,7 @@ export default function GameSettingsModal({
                   style={styles.rowText}
                   numberOfLines={1}
                   adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                   maxFontSizeMultiplier={1.2}
                 >
                   Rounds: {draftRounds}
@@ -206,6 +207,7 @@ export default function GameSettingsModal({
                   style={styles.rowText}
                   numberOfLines={1}
                   adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                   maxFontSizeMultiplier={1.2}
                 >
                   Font size: {Math.round(14 * draftFont)}
@@ -554,7 +556,7 @@ const createStyles = ({ colors }: Theme) =>
     divider: { height: 1, backgroundColor: colors.divider, marginVertical: 10 },
     row: {
       paddingVertical: 14,
-      paddingHorizontal: 14,
+      paddingHorizontal: 10,
       backgroundColor: colors.surfaceSecondary,
       borderRadius: 10,
       marginBottom: 12,
@@ -588,9 +590,9 @@ const createStyles = ({ colors }: Theme) =>
     reorderName: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
     reorderButtons: { flexDirection: 'row', gap: 8 },
     arrow: {
-      width: 40, // Fixed width - consistent touch target
-      height: 40, // Fixed height - matches applyButton
-      borderRadius: 20, // Half of width/height for circle
+      width: 36, // Fixed width - consistent touch target
+      height: 36, // Fixed height - matches applyButton
+      borderRadius: 18, // Half of width/height for circle
       backgroundColor: colors.surface,
       borderWidth: 2,
       borderColor: colors.accent,
@@ -602,8 +604,8 @@ const createStyles = ({ colors }: Theme) =>
     arrowText: {
       color: colors.accent,
       fontWeight: '700',
-      fontSize: 20, // Slightly larger for visibility
-      lineHeight: 20,
+      fontSize: 18,
+      lineHeight: 18,
       textAlign: 'center',
       textAlignVertical: 'center',
       includeFontPadding: false,
@@ -627,13 +629,13 @@ const createStyles = ({ colors }: Theme) =>
     rowsButtons: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10, // Consistent gap between buttons
+      gap: 8, // Consistent gap between buttons
       flexShrink: 0, // Don't shrink the button container
     },
     applyButton: {
-      width: 64, // Fixed width for consistency
-      height: 40, // Fixed height for touch target
-      borderRadius: 10,
+      width: 52, // Fixed width for consistency
+      height: 36, // Fixed height - matches arrow buttons
+      borderRadius: 8,
       backgroundColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
@@ -645,7 +647,7 @@ const createStyles = ({ colors }: Theme) =>
     applyText: {
       color: colors.buttonText,
       fontWeight: '600',
-      fontSize: 14,
+      fontSize: 13,
       textAlign: 'center',
     },
     applyTextDisabled: {

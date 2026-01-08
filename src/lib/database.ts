@@ -484,7 +484,7 @@ export async function addTurn(
       game_id: gameId,
       player_id: playerId,
       turn_number: finalTurnNumber,
-      score: isBust ? 0 : score,
+      score: score, // Preserve score even for busts (shows what they lost)
       is_bust: isBust,
       is_closed: isClosed,
       notes,

@@ -237,7 +237,20 @@
       "Bash(eas secret:list:*)",
       "Bash(npx eas-cli secret:list)",
       "Bash(npx eas-cli:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git tag:*)",
+      "Bash(adb shell am force-stop:*)",
+      "Bash(adb shell am start:*)",
+      "Bash(npx kill-port 8081)",
+      "Bash(adb shell input:*)",
+      "Bash(dir \"C:\\\\Users\\\\blink\\\\Downloads\\\\AuthKey*.p8\")",
+      "Bash(dir \"C:\\\\Users\\\\blink\\\\Downloads\\\\*.p8\")",
+      "Bash(move \"C:\\\\Users\\\\blink\\\\Downloads\\\\AuthKey_52YH4S6482.p8\" \"C:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\secrets\\\\AuthKey_52YH4S6482.p8\")",
+      "Bash(node scripts/generate-apple-jwt.js:*)",
+      "Bash(ls -la \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\"\" 2>/dev/null || dir \"c:UsersblinkDocuments10K10k-scorekeeperbuild \")",
+      "Bash(powershell -Command \"Move-Item -Path ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\10k-production-v1.0.6-b12.aab'' -Destination ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\archive\\\\'' -ErrorAction SilentlyContinue; Write-Host ''Archive step complete''\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\\\\build\\\\'' -Filter ''*.aab'' | Select-Object Name, Length, LastWriteTime\")",
+      "Bash(npx eas-cli submit --platform ios --latest --non-interactive)"
     ],
     "deny": [],
     "ask": []

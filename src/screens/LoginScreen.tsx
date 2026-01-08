@@ -19,7 +19,7 @@ import { ThemedLoader } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
-import { signInWithGoogle } from '../lib/auth';
+import { signInWithGoogle, signInWithApple } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { AUTH_STORAGE_KEYS, APP_SCHEME } from '../lib/authConfig';
@@ -156,6 +156,30 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
     } catch (error) {
       showAlert('Error', 'An unexpected error occurred');
       logger.error('Google sign-in error', error);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      const result = await signInWithApple();
+
+      if (!result.success) {
+        const errorMsg = typeof result.error === 'string'
+          ? result.error
+          : 'Failed to sign in with Apple';
+        if (errorMsg !== 'Authentication cancelled') {
+          showAlert('Error', errorMsg);
+        }
+        return;
+      }
+
+      // Show full-screen loader - onAuthStateChange in App.tsx will handle navigation
+      setLoading(true);
+      setLoadingMessage('');
+      logger.debug('Apple sign-in successful, waiting for session...');
+    } catch (error) {
+      showAlert('Error', 'An unexpected error occurred');
+      logger.error('Apple sign-in error', error);
     }
   };
 
@@ -431,9 +455,11 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
                   secureTextEntry={!showPassword}
                   placeholder="Enter password"
                   placeholderTextColor={styles.inputPlaceholder.color}
-                  textContentType="password"
+                  textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  spellCheck={false}
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
                   accessibilityLabel="Password"
@@ -468,9 +494,11 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
                       secureTextEntry={!showConfirmPassword}
                       placeholder="Confirm password"
                       placeholderTextColor={styles.inputPlaceholder.color}
-                      textContentType="password"
+                      textContentType="newPassword"
+                      autoComplete="new-password"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      spellCheck={false}
                       onFocus={() => setConfirmPasswordFocused(true)}
                       onBlur={() => setConfirmPasswordFocused(false)}
                       accessibilityLabel="Confirm password"
@@ -568,15 +596,20 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.appleButton, styles.appleButtonDisabled]}
-              onPress={() => showAlert('Coming Soon', 'Apple Sign In will be available in a future update.')}
-              disabled={false}
-              accessibilityLabel="Continue with Apple - Coming soon"
+              style={[styles.appleButton, buttonsDisabled && styles.appleButtonDisabled]}
+              onPress={handleAppleSignIn}
+              disabled={buttonsDisabled}
+              accessibilityLabel="Continue with Apple"
               accessibilityRole="button"
+              accessibilityState={{ disabled: buttonsDisabled }}
             >
-              <Text style={styles.appleLogo}></Text>
+              <Image
+                source={require('../../assets/images/apple_logo.png')}
+                style={styles.appleLogoImage}
+                resizeMode="contain"
+                accessibilityElementsHidden={true}
+              />
               <Text style={styles.appleButtonText}>Continue with Apple</Text>
-              <Text style={styles.comingSoonBadge}>Coming Soon</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -894,21 +927,16 @@ const createStyles = ({ colors, mode }: Theme) =>
     appleButtonDisabled: {
       opacity: 0.5,
     },
-    appleLogo: {
-      fontSize: 18,
-      color: colors.textPrimary,
-      marginRight: 8,
+    appleLogoImage: {
+      width: 18,
+      height: 18,
+      marginRight: 10,
+      tintColor: colors.textPrimary,
     },
     appleButtonText: {
       color: colors.textPrimary,
       fontSize: 13,
       fontWeight: '600',
-    },
-    comingSoonBadge: {
-      fontSize: 10,
-      color: colors.textTertiary,
-      marginLeft: 8,
-      fontStyle: 'italic',
     },
     loadingRow: {
       flexDirection: 'row',

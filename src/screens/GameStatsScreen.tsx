@@ -846,6 +846,7 @@ const createStyles = ({ colors }: Theme) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 10,
+      gap: 8,
     },
     cardGrid: {
       flexDirection: 'row',
@@ -981,19 +982,20 @@ const createStyles = ({ colors }: Theme) =>
     },
     sortToggle: {
       flexDirection: 'row',
-      gap: 8,
+      flexShrink: 1,
+      gap: 6,
     },
     sortButton: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
       backgroundColor: colors.surfaceSecondary,
     },
     sortButtonActive: {
       backgroundColor: colors.accent,
     },
     sortButtonText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
       color: colors.textSecondary,
     },

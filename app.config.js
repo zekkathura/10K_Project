@@ -15,8 +15,8 @@ const IS_PREVIEW_DEV = process.env.APP_ENV === 'preview-dev';
 const IS_PROD = process.env.APP_ENV === 'production' || (!IS_DEV && !IS_PREVIEW && !IS_PREVIEW_DEV);
 
 // App version - update this for each release
-const APP_VERSION = '1.0.6';
-const BUILD_NUMBER = 13;
+const APP_VERSION = '1.0.8';
+const BUILD_NUMBER = 15;
 
 // Package identifiers
 const getPackageName = () => {
@@ -54,6 +54,7 @@ export default {
       supportsTablet: false,  // iPhone only - no iPad screenshots required
       bundleIdentifier: getPackageName(),
       buildNumber: String(BUILD_NUMBER),
+      usesAppleSignIn: true,  // Adds Sign In with Apple entitlement
       infoPlist: {
         NSCameraUsageDescription: 'This app does not use the camera.',
         NSPhotoLibraryUsageDescription: 'This app does not access photos.',
@@ -79,6 +80,7 @@ export default {
 
     plugins: [
       'expo-web-browser',
+      'expo-apple-authentication',  // Required for native Apple Sign In on iOS
     ],
 
     extra: {

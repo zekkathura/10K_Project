@@ -100,6 +100,8 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
   const loadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scoreInputRef = useRef<string>(''); // Sync ref for bust button to read latest value
+  const textInputRef = useRef<TextInput>(null); // Ref to TextInput element
 
   const { theme } = useTheme();
   const alert = useThemedAlert();
@@ -313,7 +315,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     setSelectedTurn(turn || null);
     setSelectedRound(round);
     setIsBust(turn?.is_bust || false);
-    setScoreInput(turn ? `${turn.score}` : '');
+    const initialScore = turn ? `${turn.score}` : '';
+    setScoreInput(initialScore);
+    scoreInputRef.current = initialScore; // Sync ref on modal open
     setAttemptedSubmit(false);
     setShowScoreModal(true);
   };
@@ -335,6 +339,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         setSelectedPlayer(null);
         setSelectedTurn(null);
         setScoreInput('');
+        scoreInputRef.current = ''; // Reset ref on modal close
         setSelectedRound(null);
         setIsBust(false);
         await loadAll();
@@ -363,6 +368,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setSelectedPlayer(null);
       setSelectedTurn(null);
       setScoreInput('');
+      scoreInputRef.current = ''; // Reset ref on modal close
       setSelectedRound(null);
       setIsBust(false);
       await loadAll();
@@ -849,7 +855,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         </View>
       )}
 
-      <View style={[styles.tableContainer, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>
+      <View style={[styles.tableContainer, { paddingBottom: Math.max(1, insets.bottom) }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View
             style={{
@@ -858,6 +864,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               flex: 1,
             }}
           >
+            {/* Rounds section - fills available space */}
             <View style={[styles.tableSurface, { width: tableWidth, flex: 1 }]}>
               <View style={[styles.tableRow, styles.headerRow]}>
                 <View style={[styles.cell, styles.roundCell, styles.headerCell, { width: roundColWidth }]}>
@@ -886,7 +893,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
 
               <ScrollView
                 style={styles.bodyScroll}
-                contentContainerStyle={{ width: tableWidth, flexGrow: 1 }}
+                contentContainerStyle={{ width: tableWidth }}
                 showsVerticalScrollIndicator
               >
                 {rounds.map((round) => (
@@ -904,7 +911,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   </View>
                 ))}
               </ScrollView>
+            </View>
 
+            {/* Total section - fixed at bottom */}
+            <View style={[styles.totalSurface, { width: tableWidth }]}>
               <View style={[styles.tableRow, styles.totalRow]}>
                 <View style={[styles.cell, styles.roundCell, { width: roundColWidth }]}>
                   <Text style={styles.totalText}>Total</Text>
@@ -934,6 +944,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setSelectedPlayer(null);
                   setSelectedTurn(null);
                   setScoreInput('');
+                  scoreInputRef.current = ''; // Reset ref on modal close
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
@@ -952,6 +963,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             </Text>
             <View style={styles.inputRow}>
               <TextInput
+                ref={textInputRef}
                 style={[
                   styles.inputInner,
                   isBust && styles.inputBust,
@@ -966,9 +978,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   if (isBust) {
                     const nextVal = digitsOnly.slice(-1);
                     setScoreInput(nextVal);
+                    scoreInputRef.current = nextVal; // Keep ref in sync
                     setIsBust(false);
                   } else {
                     setScoreInput(digitsOnly);
+                    scoreInputRef.current = digitsOnly; // Keep ref in sync
                   }
                 }}
                 accessibilityLabel="Score input"
@@ -984,15 +998,19 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             </View>
 
             {/* Quick add buttons */}
+            <Text style={styles.quickAddLabel}>Quick add:</Text>
             <View style={styles.quickScoreRow} accessibilityRole="toolbar">
-              {[50, 100, 250, 500, 1000].map((amount) => (
+              {[50, 100, 200, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`add-${amount}`}
                   style={[styles.quickScoreButton, { width: clampedQuickButtonWidth }]}
                   onPress={() => {
                     const current = parseInt(scoreInput || '0', 10) || 0;
                     const newScore = Math.min(current + amount, 20000);
-                    setScoreInput(String(newScore));
+                    const newScoreStr = String(newScore);
+                    setScoreInput(newScoreStr);
+                    scoreInputRef.current = newScoreStr; // Keep ref in sync
+                    logger.debug('Quick add button pressed', { amount, newScoreStr, refAfterSet: scoreInputRef.current });
                     setIsBust(false);
                   }}
                   accessibilityLabel={`Add ${amount}`}
@@ -1006,34 +1024,6 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                     maxFontSizeMultiplier={1.2}
                   >
                     +{amount}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Quick subtract buttons */}
-            <View style={styles.quickScoreRow} accessibilityRole="toolbar">
-              {[50, 100, 250, 500, 1000].map((amount) => (
-                <TouchableOpacity
-                  key={`sub-${amount}`}
-                  style={[styles.quickScoreButton, { width: clampedQuickButtonWidth }]}
-                  onPress={() => {
-                    const current = parseInt(scoreInput || '0', 10) || 0;
-                    const newScore = Math.max(current - amount, 0);
-                    setScoreInput(String(newScore));
-                    setIsBust(false);
-                  }}
-                  accessibilityLabel={`Subtract ${amount}`}
-                  accessibilityRole="button"
-                >
-                  <Text
-                    style={styles.quickScoreTextSub}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                    maxFontSizeMultiplier={1.2}
-                  >
-                    -{amount}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1057,6 +1047,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setSelectedPlayer(null);
                   setSelectedTurn(null);
                   setScoreInput('');
+                  scoreInputRef.current = ''; // Reset ref on modal close
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
@@ -1068,14 +1059,27 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               <TouchableOpacity
                 style={[styles.modalButton, styles.bustButton]}
                 onPress={() => {
+                  // Get current score from multiple sources to handle React state timing
+                  // Priority: ref (sync updated) > state (may lag behind)
+                  const refValue = scoreInputRef.current;
+                  const stateValue = scoreInput;
+
+                  // Debug: log what values we're seeing
+                  logger.debug('Bust button pressed', { refValue, stateValue, isBust });
+
+                  // Use whichever has a value (ref is updated synchronously, state may lag)
+                  const currentScore = refValue || stateValue || '';
+
                   // If currently showing as bust (via toggle) and no score entered, toggle off
-                  if (isBust && scoreInput.trim() === '') {
+                  if (isBust && currentScore.trim() === '') {
                     setIsBust(false);
                     return;
                   }
 
                   // Save score as bust - preserves the accumulated points they lost
-                  const scoreValue = scoreInput.trim().length === 0 ? '0' : scoreInput;
+                  // If user typed/added points, save that value; otherwise save 0
+                  const scoreValue = currentScore.trim().length === 0 ? '0' : currentScore;
+                  logger.debug('Bust saving with score', { scoreValue, currentScore });
                   saveScore({ score: scoreValue, bust: true });
                 }}
                 accessibilityLabel="Mark as bust"
@@ -1315,7 +1319,7 @@ export default GameScreen;
 const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWidth: number, cellPadding: number) => {
   const { colors } = theme;
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, padding: 10, paddingTop: 0 },
+    container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 10, paddingTop: 0, paddingBottom: 0 },
     headerBar: { marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerLabel: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
     headerValue: { color: colors.accent, fontWeight: '700' },
@@ -1335,13 +1339,20 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       flex: 1,
       backgroundColor: colors.background,
       paddingTop: 4,
-      paddingBottom: 16,
     },
     tableSurface: {
       backgroundColor: colors.surface,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    totalSurface: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 8,
       overflow: 'hidden',
     },
     tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.divider },
@@ -1376,12 +1387,10 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     strikethrough: { textDecorationLine: 'line-through' },
     totalRow: {
       backgroundColor: colors.surfaceSecondary,
-      borderTopWidth: 2,
-      borderTopColor: colors.accent,
-      position: 'relative',
+      borderBottomWidth: 0,
     },
     totalText: { color: colors.textPrimary, fontWeight: '700', fontSize: 14 * scale },
-    bodyScroll: { flex: 1 },
+    bodyScroll: { flexGrow: 0, flexShrink: 1 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: {
       backgroundColor: colors.surface,
@@ -1408,12 +1417,18 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     },
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 },
     modalButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
+    quickAddLabel: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '500',
+      marginTop: 12,
+      marginBottom: 4,
+    },
     quickScoreRow: {
       flexDirection: 'row',
       justifyContent: 'center', // Center the row of buttons
       flexWrap: 'nowrap', // Prevent wrapping - buttons will shrink via adjustsFontSizeToFit
       gap: 6,
-      marginTop: 10,
     },
     quickScoreButton: {
       // Width is set dynamically via inline style (clampedQuickButtonWidth)
@@ -1430,12 +1445,6 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     },
     quickScoreTextAdd: {
       color: colors.success,
-      fontWeight: '700',
-      fontSize: 13,
-      textAlign: 'center',
-    },
-    quickScoreTextSub: {
-      color: colors.error,
       fontWeight: '700',
       fontSize: 13,
       textAlign: 'center',
