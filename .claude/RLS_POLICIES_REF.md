@@ -3,8 +3,10 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2026-01-01 (infinite recursion fix applied to both dev and prod)
-**Current Mode:** 🚧 DEVELOPMENT (Permissive policies enabled)
+**Last Verified:** 2026-01-08 (security hardening - removed permissive policies from PROD)
+**Current Mode:**
+- **PRODUCTION:** ✅ Secured (permissive policies removed)
+- **DEVELOPMENT:** 🚧 Permissive policies enabled for testing
 
 **Note:** This file is maintained for quick reference. For current state, use:
 - `node check_policies.js` to query policies programmatically
@@ -14,25 +16,27 @@
 
 ## Current RLS Policy Status
 
-### ⚠️ Development-Only Policies (REMOVE BEFORE PRODUCTION)
+### ⚠️ Development-Only Policies
+
+**PRODUCTION:** ✅ All permissive `authenticated_all_*` policies removed (2026-01-08)
+**DEVELOPMENT:** 🚧 Permissive policies still enabled for easier testing
 
 These policies bypass all security checks for easier development:
 
 ```sql
--- game_players table
-authenticated_all_game_players    → ALL operations (using: true)
-service_role_all_game_players     → ALL operations (using: true) [KEEP - needed]
+-- DEV ONLY - Removed from PROD on 2026-01-08
+authenticated_all_game_players    → ALL operations (using: true) [DEV ONLY]
+authenticated_all_games           → ALL operations (using: true) [DEV ONLY - DELETED FROM PROD]
+authenticated_all_turns           → ALL operations (using: true) [DEV ONLY]
+authenticated_all_extra_rules     → ALL operations (using: true) [DEV ONLY - DELETED FROM PROD]
 
--- games table
-authenticated_all_games           → ALL operations (using: true)
-service_role_all_games            → ALL operations (using: true) [KEEP - needed]
-
--- turns table
-authenticated_all_turns           → ALL operations (using: true)
-service_role_all_turns            → ALL operations (using: true) [KEEP - needed]
+-- Service role policies (KEEP in both DEV and PROD)
+service_role_all_game_players     → ALL operations (using: true) [ADMIN - KEEP]
+service_role_all_games            → ALL operations (using: true) [ADMIN - KEEP]
+service_role_all_turns            → ALL operations (using: true) [ADMIN - KEEP]
 ```
 
-**Action Required:** Delete `authenticated_all_*` policies before production launch.
+**Status:** Production is secured. Development keeps permissive policies for easier testing.
 
 ---
 
@@ -111,6 +115,25 @@ service_role_all_turns            → ALL operations (using: true) [KEEP - neede
 
 ---
 
+### **user_feedback** Table
+
+#### SELECT Policies
+- ✅ `feedback_select_own` - Users can read their own feedback (auth.uid() = user_id)
+
+#### INSERT Policies
+- ✅ `feedback_insert_rate_limited` - Users can insert feedback with rate limiting:
+  - Rate limit: 5 submissions per 24 hours
+  - Enforced via SQL COUNT query in WITH CHECK clause
+  - User must be authenticated (auth.uid() = user_id)
+  - Returns RLS violation error when limit exceeded
+
+#### ALL Policies
+- ✅ `feedback_service_role_all` - Service role has full access (for admin viewing in Supabase Dashboard)
+
+**Note:** No UPDATE or DELETE policies for regular users. Feedback is append-only from user perspective.
+
+---
+
 ## Recommended Cleanup Actions
 
 ### ✅ Phase 1: Remove Duplicates (COMPLETED)
@@ -123,14 +146,13 @@ Removed recursive policies that caused "infinite recursion detected" errors:
 
 Replaced with non-recursive versions that check `games.created_by_user_id` instead.
 
-### Phase 3: Production Security (Before Launch)
-```sql
--- Remove overly permissive policies
-DROP POLICY IF EXISTS "authenticated_all_game_players" ON game_players;
-DROP POLICY IF EXISTS "authenticated_all_games" ON games;
-DROP POLICY IF EXISTS "authenticated_all_turns" ON turns;
-DROP POLICY IF EXISTS "Authenticated users can view all profiles" ON profiles;
-```
+### ✅ Phase 3: Production Security (COMPLETED 2026-01-08)
+Removed overly permissive policies from PRODUCTION:
+- ✅ `authenticated_all_games` - Deleted from PROD (kept in DEV)
+- ✅ `authenticated_all_extra_rules` - Deleted from PROD (kept in DEV)
+
+**Note:** `authenticated_all_game_players` and `authenticated_all_turns` remain in DEV only for testing.
+Production now uses only restrictive policies (users can only access their own games).
 
 ---
 

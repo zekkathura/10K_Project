@@ -16,6 +16,7 @@ import { deleteAccount } from '../lib/database';
 import { logger } from '../lib/logger';
 import type { Profile } from '../lib/types';
 import { ThemeMode, useTheme, useThemedStyles } from '../lib/theme';
+import FeedbackModal from './FeedbackModal';
 
 // Privacy Policy URL - hosted on Google Sites
 const PRIVACY_POLICY_URL = 'https://sites.google.com/view/10kscorekeeper-privacy-policy/home';
@@ -33,6 +34,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const { theme, mode, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const alert = useThemedAlert();
@@ -215,7 +217,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: 20 + insets.bottom }]}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Text style={styles.menuLabel}>Settings</Text>
         <TouchableOpacity
@@ -228,7 +230,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingBottom: 40 + insets.bottom }]}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Appearance Section */}
         <Text style={styles.sectionHeader}>Appearance</Text>
         <View style={styles.section}>
@@ -332,6 +334,20 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           </View>
         </View>
 
+        {/* Support Section */}
+        <Text style={styles.sectionHeader}>Support</Text>
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => setShowFeedback(true)}
+            accessibilityLabel="Send Feedback"
+            accessibilityRole="button"
+          >
+            <Text style={styles.linkText}>Send Feedback</Text>
+            <Text style={styles.linkArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Legal Section */}
         <Text style={styles.sectionHeader}>Legal</Text>
         <View style={styles.section}>
@@ -377,6 +393,12 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           </>
         )}
       </ScrollView>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        visible={showFeedback}
+        onClose={() => setShowFeedback(false)}
+      />
     </View>
   );
 }
@@ -404,7 +426,7 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
     },
     content: {
       padding: 12,
-      // paddingBottom is set dynamically with insets.bottom
+      paddingBottom: 24, // Extra spacing at bottom of content
     },
     sectionHeader: {
       fontSize: 14,
