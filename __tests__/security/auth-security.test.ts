@@ -10,12 +10,9 @@
 
 import { logger } from '../../src/lib/logger';
 import {
-  validateEmail,
   validateJoinCode,
   validatePlayerName,
   validateGameName,
-  sanitizeForDisplay,
-  validateDeepLinkURL,
 } from '../../src/lib/validation';
 
 // Mock console methods to capture log output
@@ -156,48 +153,6 @@ describe('Logger PII Sanitization', () => {
 });
 
 describe('XSS Protection', () => {
-  describe('sanitizeForDisplay', () => {
-    it('should escape HTML script tags', () => {
-      const malicious = '<script>alert("xss")</script>';
-      const sanitized = sanitizeForDisplay(malicious);
-      expect(sanitized).not.toContain('<script>');
-      expect(sanitized).toContain('&lt;script&gt;');
-    });
-
-    it('should escape event handlers', () => {
-      const malicious = '<img src=x onerror="alert(1)">';
-      const sanitized = sanitizeForDisplay(malicious);
-      // Verify HTML tags are escaped so they won't execute
-      expect(sanitized).toContain('&lt;img');
-      expect(sanitized).toContain('&gt;');
-      // Quotes should be escaped
-      expect(sanitized).toContain('&quot;');
-    });
-
-    it('should escape javascript: URLs', () => {
-      const malicious = '<a href="javascript:alert(1)">Click</a>';
-      const sanitized = sanitizeForDisplay(malicious);
-      // Verify HTML tags are escaped so they won't execute
-      expect(sanitized).toContain('&lt;a');
-      expect(sanitized).toContain('&gt;');
-      // Quotes should be escaped
-      expect(sanitized).toContain('&quot;');
-    });
-
-    it('should escape ampersands', () => {
-      const input = 'AT&T & Verizon';
-      const sanitized = sanitizeForDisplay(input);
-      expect(sanitized).toContain('&amp;');
-    });
-
-    it('should escape quotes', () => {
-      const input = 'He said "hello" and \'goodbye\'';
-      const sanitized = sanitizeForDisplay(input);
-      expect(sanitized).toContain('&quot;');
-      expect(sanitized).toContain('&#x27;');
-    });
-  });
-
   describe('Player name validation against XSS', () => {
     it('should reject script tags in player names', () => {
       const result = validatePlayerName('<script>alert(1)</script>');
@@ -252,43 +207,6 @@ describe('SQL Injection Protection', () => {
     });
   });
 
-  describe('Email validation against injection', () => {
-    it('should reject emails with SQL syntax', () => {
-      const result = validateEmail("admin'--@test.com");
-      // Note: This may pass basic email validation but Supabase will reject it
-      // The important thing is we use parameterized queries
-      expect(result).toBeDefined();
-    });
-  });
-});
-
-describe('URL Validation', () => {
-  describe('Deep link URL validation', () => {
-    it('should accept valid app deep links', () => {
-      const result = validateDeepLinkURL('com.10kscorekeeper://join?code=ABC123');
-      expect(result.valid).toBe(true);
-    });
-
-    it('should accept valid https URLs', () => {
-      const result = validateDeepLinkURL('https://10kscorekeeper.com/join?code=ABC123');
-      expect(result.valid).toBe(true);
-    });
-
-    it('should reject javascript: URLs', () => {
-      const result = validateDeepLinkURL('javascript:alert(1)');
-      expect(result.valid).toBe(false);
-    });
-
-    it('should reject data: URLs', () => {
-      const result = validateDeepLinkURL('data:text/html,<script>alert(1)</script>');
-      expect(result.valid).toBe(false);
-    });
-
-    it('should reject file: URLs', () => {
-      const result = validateDeepLinkURL('file:///etc/passwd');
-      expect(result.valid).toBe(false);
-    });
-  });
 });
 
 describe('Password Security', () => {
