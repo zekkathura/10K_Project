@@ -78,20 +78,35 @@ When debugging auth/permission issues or after policy changes:
 
 ## AI Assistant Efficiency
 
-### Use Skills First (`.claude/skills/`)
-**Before writing code, check these Skills for patterns:**
-- `expo-dev-server` – **CRITICAL:** Always kill old processes before starting Expo, environment switching
-- `screen-layout` – **Screen architecture, safe areas, HomeScreen contentWrapper pattern**
-- `react-native-web-patterns` – Platform.OS checks, alerts, web compatibility
-- `supabase-patterns` – DB queries, realtime, GRANT permissions, RLS, error handling
-- `theme-styling` – Theme usage, modal structure, button patterns, themed alert modals
-- `validation-errors` – Input validation, error display
-- `modal-components` – Standard modal layouts, safe area handling for modals
-- `testing-patterns` – Unit tests, E2E tests, mocking, test utilities
-- `local-build` – WSL local builds, unlimited APKs without EAS quota
-- `git-workflow` – Versioning, branching, commit messages, push workflow
+### ⚠️ MANDATORY: Check Skills First (`.claude/skills/`)
 
-**Why:** Skills load on-demand, reducing context. They contain all implementation patterns.
+**CRITICAL RULE:** Before attempting ANY task, Claude Code MUST check if a skill exists for that task type and follow it exactly.
+
+**Task Type → Skill Mapping:**
+
+| When User Asks For... | MUST Check Skill First |
+|----------------------|------------------------|
+| "Build iOS/Android" or "Create APK/AAB/IPA" | `local-build` – Complete build workflows, file naming, archival |
+| "Start Expo" or "Run dev server" | `expo-dev-server` – Kill old processes, clear cache |
+| "Create new screen" or "Add modal" | `screen-layout` + `modal-components` – Architecture, safe areas |
+| "Query database" or "Add table" | `supabase-patterns` – RLS, GRANT, realtime |
+| "Style component" or "Add dark mode" | `theme-styling` – Theme hooks, color usage |
+| "Validate input" or "Show error" | `validation-errors` – Validation functions, error display |
+| "Add tests" or "Mock Supabase" | `testing-patterns` – Jest setup, mocking |
+| "Commit changes" or "Create release" | `git-workflow` – Commit format, versioning |
+| Platform-specific code (web vs mobile) | `react-native-web-patterns` – Platform.OS, alerts |
+
+**Why this is mandatory:**
+- Skills contain complete workflows (not just code snippets)
+- Skills are maintained as source of truth for patterns
+- Skipping skills leads to incomplete implementations (like iOS build missing submit step)
+- Each skill has been refined through real usage and debugging
+
+**How to use:**
+1. User requests task → Identify task type from table above
+2. Read the corresponding skill file BEFORE writing any code
+3. Follow the skill's workflow exactly (don't improvise)
+4. If skill says "do A, B, C", do ALL steps, not just A
 
 ### Essential Patterns Only
 - **Alerts**: Always check `Platform.OS` (web = `window.alert`, native = `Alert.alert`)
@@ -102,6 +117,7 @@ When debugging auth/permission issues or after policy changes:
 - **Loading States**: Use `<ThemedLoader />` from `src/components` with cycling messages and 1-second minimum display time
 - **Themed Alerts**: Use custom Modal with theme colors instead of native `Alert.alert` for consistent dark/light mode
 - **Safe Areas**: See `screen-layout` skill – screens in HomeScreen's contentWrapper don't need insets (parent handles it); standalone screens and full-screen modals do
+- **iOS Builds**: ALWAYS follow complete workflow from `local-build` skill: 1) Build IPA, 2) Submit to App Store Connect, 3) Download and archive IPA to build folder
 
 ## Supabase Credential Selection (CRITICAL)
 
@@ -203,6 +219,28 @@ wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/A
 # IMPORTANT: Use "npx eas-cli" (not just "eas") to avoid "command not found"
 npx eas-cli build --profile production --platform ios --non-interactive
 ```
+
+**⚠️ CRITICAL: iOS Build Workflow (MANDATORY STEPS)**
+
+When user requests an iOS build, Claude Code MUST complete ALL of these steps:
+
+1. **Build iOS IPA** (command above)
+2. **Submit to App Store Connect** (REQUIRED - do not skip):
+   ```bash
+   npx eas-cli submit --platform ios --latest --non-interactive
+   ```
+3. **Download IPA and move to build folder**:
+   - Check Downloads folder: `c:\Users\blink\Downloads\*.ipa`
+   - Move to: `build/10k-production-v{VER}-b{BUILD}.ipa`
+   - Archive old IPA files to `build/archive/`
+4. **Inform user**: Build will appear in TestFlight in 5-10 minutes
+
+**Why this matters:**
+- Downloading IPA alone is NOT sufficient - it won't appear in TestFlight
+- Submit command uploads to App Store Connect (required for TestFlight)
+- Local IPA is just a backup - submission is the critical step
+
+**See skill**: `.claude/skills/local-build/SKILL.md` lines 142-232 for complete iOS workflow
 
 **Local Builds (WSL - Unlimited, No Quota):**
 ```bash
