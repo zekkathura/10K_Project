@@ -259,7 +259,9 @@
       "Bash(done)",
       "Bash(while read file)",
       "Bash(then echo \"$file\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []
