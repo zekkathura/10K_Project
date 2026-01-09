@@ -204,7 +204,8 @@
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" stash)",
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" branch -D main)",
       "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" checkout -b main)",
-      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"chore: settings update\" --allow-empty)"
+      "Bash(git -C \"c:\\\\Users\\\\blink\\\\Documents\\\\10K\\\\10k-scorekeeper\" commit -m \"chore: settings update\" --allow-empty)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []
