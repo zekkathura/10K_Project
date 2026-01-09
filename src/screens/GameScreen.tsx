@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState, forwardRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedLoader, useThemedAlert } from '../components';
 import { supabase } from '../lib/supabase';
 import {
@@ -44,6 +45,8 @@ type CellAction = 'score' | 'edit' | 'delete';
 const DEFAULT_ROWS = 10;
 const MIN_ROUNDS = 5;
 const MAX_ROUNDS = 30;
+const LOAD_DEBOUNCE_MS = 300; // Debounce rapid loadAll calls
+const RECONNECT_DELAY_MS = 2000; // Delay before attempting reconnection
 
 // Cache game data at module level to persist across navigations (keyed by gameId)
 interface GameCache {
@@ -92,11 +95,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(cached?.userId || null);
   const [loadedOnce, setLoadedOnce] = useState(cached !== null); // Already loaded if cached
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
   const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
+  const loadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scoreInputRef = useRef<string>(''); // Sync ref for bust button to read latest value
+  const textInputRef = useRef<TextInput>(null); // Ref to TextInput element
 
   const { theme } = useTheme();
   const alert = useThemedAlert();
+  const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get('window').width;
 
   useImperativeHandle(ref, () => ({
@@ -160,12 +169,23 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         userId: currentUserId,
       });
     } catch (error) {
-      logger.error('Error loading game data', error);
+      logger.error('Error loading game data', error, { screen: 'GameScreen', action: 'loadGameData', extra: { gameId } });
       alert.show({ title: 'Error', message: 'Failed to load game data' });
     } finally {
       setLoading(false);
     }
   };
+
+  // Debounced version of loadAll to prevent rapid successive calls from realtime events
+  const debouncedLoadAll = useCallback(() => {
+    if (loadDebounceRef.current) {
+      clearTimeout(loadDebounceRef.current);
+    }
+    loadDebounceRef.current = setTimeout(() => {
+      loadAll();
+      loadDebounceRef.current = null;
+    }, LOAD_DEBOUNCE_MS);
+  }, [gameId]);
 
   const pushGameRefresh = async (reason: string, extra?: { totalRows?: number }): Promise<boolean> => {
     const channel = broadcastChannelRef.current;
@@ -223,6 +243,17 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   const cellPadding = Math.max(4, Math.round(8 * fitFactor));
   const modalContentWidth = Math.min(screenWidth * 0.85, 420); // matches modal maxWidth
   const modalInnerPadding = 40; // paddingHorizontal * 2 (20 each side in modalContent)
+
+  // Quick score button sizing - responsive to modal width
+  // 5 buttons + 4 gaps (6px each) = 24px of gaps
+  const QUICK_BUTTON_COUNT = 5;
+  const QUICK_BUTTON_GAP = 6;
+  const quickButtonAvailableWidth = modalContentWidth - modalInnerPadding;
+  const quickButtonWidth = Math.floor(
+    (quickButtonAvailableWidth - (QUICK_BUTTON_COUNT - 1) * QUICK_BUTTON_GAP) / QUICK_BUTTON_COUNT
+  );
+  // Clamp to reasonable bounds (min 48px for touch target, max 72px to prevent oversized buttons)
+  const clampedQuickButtonWidth = Math.max(48, Math.min(72, quickButtonWidth));
   const previewAvailableWidth = Math.max(200, modalContentWidth - modalInnerPadding);
   const previewFitFactor = Math.min(1, previewAvailableWidth / (baseTableWidth || previewAvailableWidth));
   const previewRoundColWidth = baseRoundColWidth * previewFitFactor;
@@ -268,9 +299,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               try {
                 await deleteTurn(turn.id, turn.player_id, turn.score, turn.is_bust);
                 await loadAll();
-                pushGameRefresh('score_change');
+                await pushGameRefresh('score_change');
               } catch (err) {
-                logger.error('Failed to delete score', err);
+                logger.error('Failed to delete score', err, { screen: 'GameScreen', action: 'deleteScore', extra: { gameId, turnId: turn.id, playerId: turn.player_id } });
                 alert.show({ title: 'Error', message: 'Failed to delete score' });
               }
             },
@@ -284,7 +315,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     setSelectedTurn(turn || null);
     setSelectedRound(round);
     setIsBust(turn?.is_bust || false);
-    setScoreInput(turn ? `${turn.score}` : '');
+    const initialScore = turn ? `${turn.score}` : '';
+    setScoreInput(initialScore);
+    scoreInputRef.current = initialScore; // Sync ref on modal open
     setAttemptedSubmit(false);
     setShowScoreModal(true);
   };
@@ -306,12 +339,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         setSelectedPlayer(null);
         setSelectedTurn(null);
         setScoreInput('');
+        scoreInputRef.current = ''; // Reset ref on modal close
         setSelectedRound(null);
         setIsBust(false);
         await loadAll();
-        pushGameRefresh('score_change');
+        await pushGameRefresh('score_change');
       } catch (err) {
-        logger.error('Failed to reset score', err);
+        logger.error('Failed to reset score', err, { screen: 'GameScreen', action: 'resetScore', extra: { gameId, turnId: selectedTurn.id, playerId: selectedPlayer.id, round: selectedRound } });
         alert.show({ title: 'Error', message: 'Failed to reset score' });
       }
       return;
@@ -334,12 +368,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setSelectedPlayer(null);
       setSelectedTurn(null);
       setScoreInput('');
+      scoreInputRef.current = ''; // Reset ref on modal close
       setSelectedRound(null);
       setIsBust(false);
       await loadAll();
-      pushGameRefresh('score_change');
+      await pushGameRefresh('score_change');
     } catch (err) {
-      logger.error('Failed to save score', err);
+      logger.error('Failed to save score', err, { screen: 'GameScreen', action: 'saveScore', extra: { gameId, playerId: selectedPlayer.id, round: selectedRound, isUpdate: !!selectedTurn } });
       alert.show({ title: 'Error', message: 'Failed to save score' });
     }
   };
@@ -357,9 +392,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             try {
               await deleteRound(gameId, round);
               await loadAll();
-              pushGameRefresh('score_change');
+              await pushGameRefresh('score_change');
             } catch (err) {
-              logger.error('Failed to delete round', err);
+              logger.error('Failed to delete round', err, { screen: 'GameScreen', action: 'deleteRound', extra: { gameId, round } });
               alert.show({ title: 'Error', message: 'Failed to delete round' });
             }
           },
@@ -372,9 +407,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await removePlayer(playerId);
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error removing player', error);
+      logger.error('Error removing player', error, { screen: 'GameScreen', action: 'removePlayer', extra: { gameId, playerId } });
       alert.show({ title: 'Error', message: 'Failed to remove player' });
     }
   };
@@ -383,9 +418,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await updatePlayerOrder(gameId, ordered.map((p) => p.id));
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error updating player order', error);
+      logger.error('Error updating player order', error, { screen: 'GameScreen', action: 'reorderPlayers', extra: { gameId } });
       alert.show({ title: 'Error', message: 'Failed to update player order' });
     }
   };
@@ -423,7 +458,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await updateGameRounds(gameId, clamped);
       setTotalRows(clamped);
     } catch (err) {
-      logger.error('Failed to update rounds', err);
+      logger.error('Failed to update rounds', err, { screen: 'GameScreen', action: 'updateRounds', extra: { gameId, targetRounds: clamped } });
       alert.show({ title: 'Error', message: 'Could not update rounds. Please try again.' });
       return false;
     }
@@ -443,9 +478,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await addGuestPlayer(gameId, trimmed);
       await loadAll();
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error: any) {
-      logger.error('Error adding player', error);
+      logger.error('Error adding player', error, { screen: 'GameScreen', action: 'addPlayer', extra: { gameId, playerName: trimmed } });
       alert.show({ title: 'Error', message: error.message || 'Failed to add player' });
     }
   };
@@ -470,9 +505,9 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       setShowRenameModal(false);
       setRenamePlayer(null);
       setRenameInput('');
-      pushGameRefresh('player_change');
+      await pushGameRefresh('player_change');
     } catch (error) {
-      logger.error('Error renaming player', error);
+      logger.error('Error renaming player', error, { screen: 'GameScreen', action: 'renamePlayer', extra: { gameId, playerId: renamePlayer.id, newName: trimmed } });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to rename player' });
     }
   };
@@ -481,9 +516,43 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
   useEffect(() => {
     let dataChannel: RealtimeChannel | null = null;
     let broadcastChannel: RealtimeChannel | null = null;
+    let isMounted = true;
+
+    const handleConnectionChange = (connected: boolean) => {
+      if (isMounted) {
+        setRealtimeConnected(connected);
+        if (connected) {
+          logger.debug('Realtime connected for game:', gameId);
+        } else {
+          logger.warn('Realtime disconnected for game:', gameId);
+        }
+      }
+    };
+
+    const attemptReconnect = () => {
+      if (!isMounted) return;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (isMounted) {
+          logger.debug('Attempting realtime reconnection for game:', gameId);
+          subscribe();
+        }
+      }, RECONNECT_DELAY_MS);
+    };
 
     const subscribe = async () => {
       try {
+        // Clean up existing channels before resubscribing
+        if (dataChannel) {
+          try { await dataChannel.unsubscribe(); supabase.removeChannel(dataChannel); } catch { /* ignore */ }
+        }
+        if (broadcastChannel) {
+          try { await broadcastChannel.unsubscribe(); supabase.removeChannel(broadcastChannel); } catch { /* ignore */ }
+        }
+
+        // Data channel: listens for Postgres changes (INSERT/UPDATE/DELETE)
         dataChannel = supabase
           .channel(`game-${gameId}-data`)
           .on(
@@ -495,7 +564,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `game_id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           )
           .on(
@@ -507,7 +576,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           )
           .on(
@@ -519,39 +588,67 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               filter: `game_id=eq.${gameId}`,
             },
             () => {
-              loadAll();
+              debouncedLoadAll();
             },
           );
+
         realtimeChannelRef.current = dataChannel;
         dataChannel.subscribe((status) => {
-          if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            logger.warn('Realtime data subscribe status:', status);
+          if (status === 'SUBSCRIBED') {
+            handleConnectionChange(true);
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            logger.warn('Realtime data channel error:', status);
+            handleConnectionChange(false);
+            attemptReconnect();
+          } else if (status === 'CLOSED') {
+            handleConnectionChange(false);
           }
         });
 
+        // Broadcast channel: explicit refresh notifications from other clients
+        // self: false - don't receive our own broadcasts (we already called loadAll locally)
         broadcastChannel = supabase
-          .channel(`game-${gameId}-broadcast`, { config: { broadcast: { self: true, ack: true } } })
+          .channel(`game-${gameId}-broadcast`, { config: { broadcast: { self: false, ack: true } } })
           .on('broadcast', { event: 'game_refresh' }, ({ payload }) => {
+            logger.debug('Received game_refresh broadcast:', payload?.reason);
             const nextRows = payload?.totalRows;
             if (typeof nextRows === 'number') {
               const clamped = Math.min(30, Math.max(5, nextRows));
               setTotalRows(clamped);
             }
-            loadAll();
+            // Use debounced load since postgres_changes might also fire
+            debouncedLoadAll();
           });
+
         broadcastChannelRef.current = broadcastChannel;
         broadcastChannel.subscribe((status) => {
-          if (status !== 'SUBSCRIBED' && status !== 'CLOSED') {
-            logger.warn('Realtime broadcast subscribe status:', status);
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            logger.warn('Realtime broadcast channel error:', status);
+            attemptReconnect();
           }
         });
       } catch (err) {
         logger.warn('Realtime subscribe failed', err);
+        handleConnectionChange(false);
+        attemptReconnect();
       }
     };
 
     subscribe();
+
     return () => {
+      isMounted = false;
+
+      // Clear any pending debounce/reconnect timers
+      if (loadDebounceRef.current) {
+        clearTimeout(loadDebounceRef.current);
+        loadDebounceRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       const cleanupChannel = async (channel: RealtimeChannel | null, label: string) => {
         if (!channel) return;
         try {
@@ -571,19 +668,23 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       realtimeChannelRef.current = null;
       broadcastChannelRef.current = null;
     };
-  }, [gameId]);
+  }, [gameId, debouncedLoadAll]);
 
   const handleDeleteGame = async () => {
     logger.debug('Delete game clicked for gameId:', gameId);
     try {
       await deleteGame(gameId);
-      pushGameRefresh('game_deleted');
+      await pushGameRefresh('game_deleted');
       setShowSettingsModal(false);
       alert.show({ title: 'Game deleted', message: 'This game has been removed.' });
       onGameRemoved?.();
       onBack();
-    } catch (error) {
-      logger.error('Error deleting game', error);
+    } catch (error: any) {
+      logger.error('Error deleting game', error, {
+        screen: 'GameScreen',
+        action: 'deleteGame',
+        extra: { gameId, step: error?.step, originalCode: error?.originalError?.code }
+      });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to delete game' });
     }
   };
@@ -592,10 +693,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
     try {
       await reopenGame(gameId);
       await loadAll();
+      await pushGameRefresh('game_reopened');
       setShowSettingsModal(false);
       alert.show({ title: 'Game Re-opened', message: 'You can now make changes and finish the game again.' });
     } catch (error) {
-      logger.error('Error reopening game', error);
+      logger.error('Error reopening game', error, { screen: 'GameScreen', action: 'reopenGame', extra: { gameId } });
       const message = error instanceof Error ? error.message : 'Failed to re-open game';
       alert.show({ title: 'Error', message });
     }
@@ -652,13 +754,13 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       await cleanupMissingScores();
       const winningScore = totals[selectedWinnerId] ?? 0;
       await finishGame(gameId, selectedWinnerId, winningScore);
-      pushGameRefresh('game_finished');
+      await pushGameRefresh('game_finished');
       setShowFinishConfirm(false);
       alert.show({ title: 'Game finished', message: 'This game has been marked complete.' });
       onGameRemoved?.();
       onBack();
     } catch (error) {
-      logger.error('Error finishing game', error);
+      logger.error('Error finishing game', error, { screen: 'GameScreen', action: 'finishGame', extra: { gameId, selectedWinnerId } });
       alert.show({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to finish game' });
     } finally {
       setFinishing(false);
@@ -753,7 +855,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
         </View>
       )}
 
-      <View style={styles.tableContainer}>
+      <View style={[styles.tableContainer, { paddingBottom: Math.max(1, insets.bottom) }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View
             style={{
@@ -762,6 +864,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               flex: 1,
             }}
           >
+            {/* Rounds section - fills available space */}
             <View style={[styles.tableSurface, { width: tableWidth, flex: 1 }]}>
               <View style={[styles.tableRow, styles.headerRow]}>
                 <View style={[styles.cell, styles.roundCell, styles.headerCell, { width: roundColWidth }]}>
@@ -790,7 +893,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
 
               <ScrollView
                 style={styles.bodyScroll}
-                contentContainerStyle={{ width: tableWidth, flexGrow: 1 }}
+                contentContainerStyle={{ width: tableWidth }}
                 showsVerticalScrollIndicator
               >
                 {rounds.map((round) => (
@@ -808,7 +911,10 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   </View>
                 ))}
               </ScrollView>
+            </View>
 
+            {/* Total section - fixed at bottom */}
+            <View style={[styles.totalSurface, { width: tableWidth }]}>
               <View style={[styles.tableRow, styles.totalRow]}>
                 <View style={[styles.cell, styles.roundCell, { width: roundColWidth }]}>
                   <Text style={styles.totalText}>Total</Text>
@@ -838,6 +944,7 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   setSelectedPlayer(null);
                   setSelectedTurn(null);
                   setScoreInput('');
+                  scoreInputRef.current = ''; // Reset ref on modal close
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
@@ -852,10 +959,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                  {selectedPlayer ? ` ${getDisplayName(selectedPlayer)}` : ''}
               </Text>
             <Text style={styles.modalSubtitle}>
-              Round {selectedRound} | Current: {selectedTurn ? (selectedTurn.is_bust ? 'Bust' : selectedTurn.score) : '-'}
+              Round {selectedRound} | Current total: {totals[selectedPlayer?.id ?? ''] ?? 0}
             </Text>
             <View style={styles.inputRow}>
               <TextInput
+                ref={textInputRef}
                 style={[
                   styles.inputInner,
                   isBust && styles.inputBust,
@@ -870,9 +978,11 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
                   if (isBust) {
                     const nextVal = digitsOnly.slice(-1);
                     setScoreInput(nextVal);
+                    scoreInputRef.current = nextVal; // Keep ref in sync
                     setIsBust(false);
                   } else {
                     setScoreInput(digitsOnly);
+                    scoreInputRef.current = digitsOnly; // Keep ref in sync
                   }
                 }}
                 accessibilityLabel="Score input"
@@ -888,41 +998,33 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             </View>
 
             {/* Quick add buttons */}
+            <Text style={styles.quickAddLabel}>Quick add:</Text>
             <View style={styles.quickScoreRow} accessibilityRole="toolbar">
-              {[50, 100, 250, 500, 1000].map((amount) => (
+              {[50, 100, 200, 500, 1000].map((amount) => (
                 <TouchableOpacity
                   key={`add-${amount}`}
-                  style={styles.quickScoreButton}
+                  style={[styles.quickScoreButton, { width: clampedQuickButtonWidth }]}
                   onPress={() => {
                     const current = parseInt(scoreInput || '0', 10) || 0;
                     const newScore = Math.min(current + amount, 20000);
-                    setScoreInput(String(newScore));
+                    const newScoreStr = String(newScore);
+                    setScoreInput(newScoreStr);
+                    scoreInputRef.current = newScoreStr; // Keep ref in sync
+                    logger.debug('Quick add button pressed', { amount, newScoreStr, refAfterSet: scoreInputRef.current });
                     setIsBust(false);
                   }}
                   accessibilityLabel={`Add ${amount}`}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.quickScoreTextAdd}>+{amount}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Quick subtract buttons */}
-            <View style={styles.quickScoreRow} accessibilityRole="toolbar">
-              {[50, 100, 250, 500, 1000].map((amount) => (
-                <TouchableOpacity
-                  key={`sub-${amount}`}
-                  style={styles.quickScoreButton}
-                  onPress={() => {
-                    const current = parseInt(scoreInput || '0', 10) || 0;
-                    const newScore = Math.max(current - amount, 0);
-                    setScoreInput(String(newScore));
-                    setIsBust(false);
-                  }}
-                  accessibilityLabel={`Subtract ${amount}`}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.quickScoreTextSub}>-{amount}</Text>
+                  <Text
+                    style={styles.quickScoreTextAdd}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    +{amount}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -930,19 +1032,22 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.resetButton]}
-                onPress={() => {
+                onPress={async () => {
                   if (selectedTurn) {
-                    deleteTurn(selectedTurn.id, selectedTurn.player_id, selectedTurn.score, selectedTurn.is_bust)
-                      .then(loadAll)
-                      .catch((err) => {
-                        logger.error('Failed to reset score', err);
-                        alert.show({ title: 'Error', message: 'Failed to reset score' });
-                      });
+                    try {
+                      await deleteTurn(selectedTurn.id, selectedTurn.player_id, selectedTurn.score, selectedTurn.is_bust);
+                      await loadAll();
+                      await pushGameRefresh('score_change');
+                    } catch (err) {
+                      logger.error('Failed to reset score', err, { screen: 'GameScreen', action: 'resetScoreModal', extra: { gameId, turnId: selectedTurn.id, playerId: selectedTurn.player_id } });
+                      alert.show({ title: 'Error', message: 'Failed to reset score' });
+                    }
                   }
                   setShowScoreModal(false);
                   setSelectedPlayer(null);
                   setSelectedTurn(null);
                   setScoreInput('');
+                  scoreInputRef.current = ''; // Reset ref on modal close
                   setSelectedRound(null);
                   setIsBust(false);
                 }}
@@ -954,14 +1059,27 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
               <TouchableOpacity
                 style={[styles.modalButton, styles.bustButton]}
                 onPress={() => {
+                  // Get current score from multiple sources to handle React state timing
+                  // Priority: ref (sync updated) > state (may lag behind)
+                  const refValue = scoreInputRef.current;
+                  const stateValue = scoreInput;
+
+                  // Debug: log what values we're seeing
+                  logger.debug('Bust button pressed', { refValue, stateValue, isBust });
+
+                  // Use whichever has a value (ref is updated synchronously, state may lag)
+                  const currentScore = refValue || stateValue || '';
+
                   // If currently showing as bust (via toggle) and no score entered, toggle off
-                  if (isBust && scoreInput.trim() === '') {
+                  if (isBust && currentScore.trim() === '') {
                     setIsBust(false);
                     return;
                   }
 
                   // Save score as bust - preserves the accumulated points they lost
-                  const scoreValue = scoreInput.trim().length === 0 ? '0' : scoreInput;
+                  // If user typed/added points, save that value; otherwise save 0
+                  const scoreValue = currentScore.trim().length === 0 ? '0' : currentScore;
+                  logger.debug('Bust saving with score', { scoreValue, currentScore });
                   saveScore({ score: scoreValue, bust: true });
                 }}
                 accessibilityLabel="Mark as bust"
@@ -1051,8 +1169,14 @@ const GameScreen = forwardRef(({ gameId, onBack, onGameRemoved }: GameScreenProp
       />
 
       <Modal visible={showFinishConfirm} transparent animationType="fade" onRequestClose={() => setShowFinishConfirm(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[
+          styles.modalOverlay,
+          {
+            paddingTop: Math.max(20, insets.top + 10),
+            paddingBottom: Math.max(20, insets.bottom + 10),
+          }
+        ]}>
+          <View style={[styles.modalContent, styles.verifyModalContent]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Verify scores</Text>
               <TouchableOpacity
@@ -1195,7 +1319,7 @@ export default GameScreen;
 const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWidth: number, cellPadding: number) => {
   const { colors } = theme;
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, padding: 10, paddingTop: 0 },
+    container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 10, paddingTop: 0, paddingBottom: 0 },
     headerBar: { marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerLabel: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
     headerValue: { color: colors.accent, fontWeight: '700' },
@@ -1215,13 +1339,20 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       flex: 1,
       backgroundColor: colors.background,
       paddingTop: 4,
-      paddingBottom: 16,
     },
     tableSurface: {
       backgroundColor: colors.surface,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    totalSurface: {
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 8,
       overflow: 'hidden',
     },
     tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.divider },
@@ -1256,12 +1387,10 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     strikethrough: { textDecorationLine: 'line-through' },
     totalRow: {
       backgroundColor: colors.surfaceSecondary,
-      borderTopWidth: 2,
-      borderTopColor: colors.accent,
-      position: 'relative',
+      borderBottomWidth: 0,
     },
     totalText: { color: colors.textPrimary, fontWeight: '700', fontSize: 14 * scale },
-    bodyScroll: { flex: 1 },
+    bodyScroll: { flexGrow: 0, flexShrink: 1 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: {
       backgroundColor: colors.surface,
@@ -1271,6 +1400,9 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       maxWidth: 420,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    verifyModalContent: {
+      maxHeight: '100%',
     },
     modalTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
     modalSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 12 },
@@ -1285,19 +1417,29 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
     },
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 12 },
     modalButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
+    quickAddLabel: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '500',
+      marginTop: 12,
+      marginBottom: 4,
+    },
     quickScoreRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center', // Center the row of buttons
+      flexWrap: 'nowrap', // Prevent wrapping - buttons will shrink via adjustsFontSizeToFit
       gap: 6,
-      marginTop: 10,
     },
     quickScoreButton: {
-      flex: 1,
-      paddingVertical: 8,
-      paddingHorizontal: 4,
+      // Width is set dynamically via inline style (clampedQuickButtonWidth)
+      // Removed flex: 1 to use calculated width instead
+      minHeight: 40, // Ensure minimum touch target
+      paddingVertical: 10,
+      paddingHorizontal: 6,
       borderRadius: 6,
       backgroundColor: colors.surfaceSecondary,
       alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -1305,11 +1447,7 @@ const createStyles = (theme: Theme, scale: number, roundWidth: number, playerWid
       color: colors.success,
       fontWeight: '700',
       fontSize: 13,
-    },
-    quickScoreTextSub: {
-      color: colors.error,
-      fontWeight: '700',
-      fontSize: 13,
+      textAlign: 'center',
     },
     modalButton: {
       flex: 1,

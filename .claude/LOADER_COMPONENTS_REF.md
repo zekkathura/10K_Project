@@ -188,6 +188,38 @@ export default function App() {
 
 ---
 
+### ScreenContainer (Layout)
+
+Standardized layout wrapper for screens rendered inside HomeScreen's contentWrapper.
+
+**Location:** `src/components/ScreenContainer.tsx`
+
+**Usage:**
+```tsx
+import { ScreenContainer } from '../components';
+
+function MyScreen() {
+  return (
+    <ScreenContainer scrollable={true} contentPaddingBottom={20}>
+      {/* Screen content */}
+    </ScreenContainer>
+  );
+}
+```
+
+**Props:**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `scrollable` | `boolean` | `true` | Wrap content in ScrollView |
+| `contentPaddingBottom` | `number` | `0` | Extra bottom padding for content |
+| `style` | `ViewStyle` | - | Custom container style |
+| `contentStyle` | `ViewStyle` | - | Custom scroll content style |
+| `testID` | `string` | - | Test ID for testing |
+
+**Note:** Only use for screens inside HomeScreen's contentWrapper. Standalone screens and modals should handle their own safe areas. See `screen-layout` skill for details.
+
+---
+
 ## File Structure
 
 ```
@@ -197,6 +229,7 @@ src/components/
   NativeDiceLoader.tsx  # Mobile-only 2D dice animation
   ThemedLoader.tsx      # Cross-platform wrapper (use this)
   ThemedAlert.tsx       # Cross-platform modal alerts (use this)
+  ScreenContainer.tsx   # Layout wrapper for screens in contentWrapper
 ```
 
 ## Notes

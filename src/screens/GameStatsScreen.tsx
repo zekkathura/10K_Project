@@ -105,11 +105,11 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
     return () => clearInterval(interval);
   }, [loading]);
 
-  const StatCard = ({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) => (
+  const StatCard = ({ label, value, subtext, subtextHighlight }: { label: string; value: string | number; subtext?: string; subtextHighlight?: boolean }) => (
     <View style={styles.statCard}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-      {subtext ? <Text style={styles.statSubtext}>{subtext}</Text> : null}
+      {subtext ? <Text style={[styles.statSubtext, subtextHighlight && styles.statSubtextHighlight]}>{subtext}</Text> : null}
     </View>
   );
 
@@ -214,8 +214,10 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         .eq('user_id', userId);
 
       const userEntries = myGamePlayers || [];
-      // Only count completed games for stats
-      const completedEntries = userEntries.filter(entry => entry.game?.status === 'ended');
+      // Only count completed games for stats (check both 'ended' and legacy 'complete')
+      const completedEntries = userEntries.filter(entry =>
+        entry.game?.status === 'ended' || entry.game?.status === 'complete'
+      );
       const completedGamesCount = completedEntries.length;
       const endedGameIds = completedEntries.map(entry => entry.game_id);
       // Player IDs only from completed games (for filtering turns)
@@ -592,7 +594,7 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                   onPress={() => setActiveModal('bestTurn')}
                   disabled={!userStats.bestTurnDetail}
                 />
-                <StatCard label="Bust Streak" value={userStats.longestBustStreak} subtext="Longest" />
+                <StatCard label="Longest Bust Streak" value={userStats.longestBustStreak} />
               </View>
             </View>
           ) : (
@@ -601,7 +603,8 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
         </View>
 
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Overall</Text>
+          <Text style={styles.sectionTitle}>All Players</Text>
+          <Text style={styles.sectionSubtitle}>Stats across all games and players</Text>
           {overallStats ? (
             <>
               <View style={styles.masonryContainer}>
@@ -627,9 +630,10 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
                     value={Math.round(overallStats.averageScorePerRound)}
                   />
                   <StatCard
-                    label="Bust Streak"
+                    label="Longest Bust Streak"
                     value={overallStats.longestBustStreak}
-                    subtext={overallStats.longestBustStreak > 0 ? `By ${overallStats.longestBustStreakPlayer}` : undefined}
+                    subtext={overallStats.longestBustStreak > 0 ? overallStats.longestBustStreakPlayer : undefined}
+                    subtextHighlight
                   />
                 </View>
               </View>
@@ -670,19 +674,19 @@ export default function GameStatsScreen({ navigation, onOpenProfile }: GameStats
               ) : (
                 <>
                   <View style={styles.listHeaderRow}>
-                    <Text style={styles.listHeaderRank}>#</Text>
-                    <Text style={styles.listHeaderName}>Player</Text>
-                    <Text style={styles.listHeaderScore}>Avg Score</Text>
+                    <Text style={styles.listHeaderRank} maxFontSizeMultiplier={1.2}>#</Text>
+                    <Text style={styles.listHeaderName} maxFontSizeMultiplier={1.2}>Player</Text>
+                    <Text style={styles.listHeaderScore} maxFontSizeMultiplier={1.2}>Avg Score</Text>
                   </View>
-                  <ScrollView style={styles.playersList} nestedScrollEnabled>
+                  <ScrollView style={styles.playersList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {sortedPlayers.map((player, index) => (
                       <View key={player.name + index} style={styles.listRow}>
-                        <Text style={styles.listRank}>{index + 1}</Text>
+                        <Text style={styles.listRank} maxFontSizeMultiplier={1.2}>{index + 1}</Text>
                         <View style={styles.listContent}>
-                          <Text style={styles.listName}>{player.name}</Text>
-                          <Text style={styles.listSubtext}>{player.games} games</Text>
+                          <Text style={styles.listName} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.2}>{player.name}</Text>
+                          <Text style={styles.listSubtext} maxFontSizeMultiplier={1.2}>{player.games} games</Text>
                         </View>
-                        <Text style={styles.listAvgScore}>{player.avgScore}</Text>
+                        <Text style={styles.listAvgScore} maxFontSizeMultiplier={1.2}>{player.avgScore}</Text>
                       </View>
                     ))}
                   </ScrollView>
@@ -830,6 +834,11 @@ const createStyles = ({ colors }: Theme) =>
       fontWeight: '700',
       color: colors.textPrimary,
       marginTop: 10,
+      marginBottom: 4,
+    },
+    sectionSubtitle: {
+      fontSize: 13,
+      color: colors.textTertiary,
       marginBottom: 10,
     },
     sectionHeaderRow: {
@@ -837,6 +846,7 @@ const createStyles = ({ colors }: Theme) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 10,
+      gap: 8,
     },
     cardGrid: {
       flexDirection: 'row',
@@ -879,6 +889,10 @@ const createStyles = ({ colors }: Theme) =>
       marginTop: 6,
       fontSize: 12,
       color: colors.textTertiary,
+    },
+    statSubtextHighlight: {
+      color: colors.accentLight,
+      fontWeight: '600',
     },
     // Highlight stat card styles
     highlightStatCard: {
@@ -947,7 +961,7 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 12,
       fontWeight: '600',
       color: colors.textTertiary,
-      width: 24,
+      minWidth: 28,
       textTransform: 'uppercase',
     },
     listHeaderName: {
@@ -962,25 +976,26 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 12,
       fontWeight: '600',
       color: colors.textTertiary,
-      minWidth: 70,
+      minWidth: 80,
       textAlign: 'right',
       textTransform: 'uppercase',
     },
     sortToggle: {
       flexDirection: 'row',
-      gap: 8,
+      flexShrink: 1,
+      gap: 6,
     },
     sortButton: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
       backgroundColor: colors.surfaceSecondary,
     },
     sortButtonActive: {
       backgroundColor: colors.accent,
     },
     sortButtonText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
       color: colors.textSecondary,
     },
@@ -988,12 +1003,13 @@ const createStyles = ({ colors }: Theme) =>
       color: colors.buttonText,
     },
     playersList: {
-      maxHeight: 300,
+      maxHeight: 280,
+      flexGrow: 0,
     },
     listRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 8,
+      paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
@@ -1001,11 +1017,12 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 16,
       fontWeight: '700',
       color: colors.accent,
-      width: 24,
+      minWidth: 28,
     },
     listContent: {
       marginLeft: 10,
       flex: 1,
+      flexShrink: 1,
     },
     listName: {
       fontSize: 15,
@@ -1020,7 +1037,7 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 15,
       fontWeight: '600',
       color: colors.textPrimary,
-      minWidth: 50,
+      minWidth: 80,
       textAlign: 'right',
     },
     emptyText: {

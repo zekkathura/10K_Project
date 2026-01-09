@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GamePlayer } from '../lib/types';
 import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 import { logger } from '../lib/logger';
@@ -43,6 +44,7 @@ export default function GameSettingsModal({
 }: GameSettingsModalProps) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const showAlert = alertFn || Alert.alert;
   const [mode, setMode] = useState<'menu' | 'reorder' | 'remove' | 'add'>('menu');
   const [order, setOrder] = useState<GamePlayer[]>(players);
@@ -85,7 +87,15 @@ export default function GameSettingsModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[
+        styles.overlay,
+        {
+          paddingTop: Math.max(20, insets.top + 10),
+          paddingBottom: Math.max(30, insets.bottom + 20),
+          paddingLeft: Math.max(20, insets.left),
+          paddingRight: Math.max(20, insets.right),
+        }
+      ]}>
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Game Settings</Text>
@@ -100,6 +110,11 @@ export default function GameSettingsModal({
           </View>
           <View style={styles.divider} />
 
+          <ScrollView
+            style={styles.cardContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
           {mode === 'menu' && gameStatus === 'active' && (
             <>
               <Text style={styles.groupLabel}>Player settings</Text>
@@ -140,60 +155,98 @@ export default function GameSettingsModal({
 
               <Text style={[styles.groupLabel, { marginTop: 8 }]}>Game settings</Text>
               <View style={[styles.row, styles.rowsControl]}>
-                <Text style={styles.rowText}>Rounds: {draftRounds}</Text>
+                <Text
+                  style={styles.rowText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  maxFontSizeMultiplier={1.2}
+                >
+                  Rounds: {draftRounds}
+                </Text>
                 <View style={styles.rowsButtons}>
                   <TouchableOpacity
                     style={[styles.arrow, draftRounds <= 5 && styles.arrowDisabled]}
                     onPress={() => setDraftRounds(Math.max(5, draftRounds - 5))}
                     disabled={draftRounds <= 5}
+                    accessibilityLabel="Decrease rounds"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.arrowText}>-</Text>
+                    <Text style={styles.arrowText} maxFontSizeMultiplier={1.2}>-</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.arrow, draftRounds >= 30 && styles.arrowDisabled]}
                     onPress={() => setDraftRounds(Math.min(30, draftRounds + 5))}
                     disabled={draftRounds >= 30}
+                    accessibilityLabel="Increase rounds"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.arrowText}>+</Text>
+                    <Text style={styles.arrowText} maxFontSizeMultiplier={1.2}>+</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.applyButton, draftRounds === totalRows && styles.arrowDisabled]}
+                    style={[styles.applyButton, draftRounds === totalRows && styles.applyButtonDisabled]}
                     onPress={async () => {
                       const applied = await onApplyRounds(draftRounds);
                       if (applied) onClose();
                     }}
                     disabled={draftRounds === totalRows}
+                    accessibilityLabel="Apply rounds"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.applyText}>Apply</Text>
+                    <Text
+                      style={[styles.applyText, draftRounds === totalRows && styles.applyTextDisabled]}
+                      maxFontSizeMultiplier={1.2}
+                    >
+                      Apply
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
               <View style={[styles.row, styles.rowsControl]}>
-                <Text style={styles.rowText}>Font size: {Math.round(14 * draftFont)}</Text>
+                <Text
+                  style={styles.rowText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  maxFontSizeMultiplier={1.2}
+                >
+                  Font size: {Math.round(14 * draftFont)}
+                </Text>
                 <View style={styles.rowsButtons}>
                   <TouchableOpacity
                     style={[styles.arrow, draftFont <= 0.6 && styles.arrowDisabled]}
                     onPress={() => setDraftFont(Math.max(0.6, parseFloat((draftFont - 0.1).toFixed(2))))}
                     disabled={draftFont <= 0.6}
+                    accessibilityLabel="Decrease font size"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.arrowText}>-</Text>
+                    <Text style={styles.arrowText} maxFontSizeMultiplier={1.2}>-</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.arrow, draftFont >= 2 && styles.arrowDisabled]}
                     onPress={() => setDraftFont(Math.min(2, parseFloat((draftFont + 0.1).toFixed(2))))}
                     disabled={draftFont >= 2}
+                    accessibilityLabel="Increase font size"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.arrowText}>+</Text>
+                    <Text style={styles.arrowText} maxFontSizeMultiplier={1.2}>+</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.applyButton, Math.abs(draftFont - fontScale) < 0.001 && styles.arrowDisabled]}
+                    style={[styles.applyButton, Math.abs(draftFont - fontScale) < 0.001 && styles.applyButtonDisabled]}
                     onPress={() => {
                       onFontChange(draftFont);
                       onClose();
                     }}
                     disabled={Math.abs(draftFont - fontScale) < 0.001}
+                    accessibilityLabel="Apply font size"
+                    accessibilityRole="button"
                   >
-                    <Text style={styles.applyText}>Apply</Text>
+                    <Text
+                      style={[styles.applyText, Math.abs(draftFont - fontScale) < 0.001 && styles.applyTextDisabled]}
+                      maxFontSizeMultiplier={1.2}
+                    >
+                      Apply
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -444,6 +497,7 @@ export default function GameSettingsModal({
               </View>
             </>
           )}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -457,6 +511,7 @@ const createStyles = ({ colors }: Theme) =>
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
+      // Base padding - will be overridden by dynamic safe area insets
       padding: 20,
     },
     card: {
@@ -464,7 +519,9 @@ const createStyles = ({ colors }: Theme) =>
       borderRadius: 16,
       width: '100%',
       maxWidth: 420,
+      maxHeight: '100%', // Respects the safe area padding from overlay
       padding: 20,
+      paddingBottom: 24, // Extra bottom padding for gesture area
       borderWidth: 1,
       borderColor: colors.border,
       shadowColor: colors.textPrimary,
@@ -472,6 +529,10 @@ const createStyles = ({ colors }: Theme) =>
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
+    },
+    cardContent: {
+      flexGrow: 0, // Don't expand beyond content
+      flexShrink: 1, // Allow shrinking if needed
     },
     header: {
       paddingBottom: 12,
@@ -495,7 +556,7 @@ const createStyles = ({ colors }: Theme) =>
     divider: { height: 1, backgroundColor: colors.divider, marginVertical: 10 },
     row: {
       paddingVertical: 14,
-      paddingHorizontal: 14,
+      paddingHorizontal: 10,
       backgroundColor: colors.surfaceSecondary,
       borderRadius: 10,
       marginBottom: 12,
@@ -506,7 +567,13 @@ const createStyles = ({ colors }: Theme) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    rowText: { color: colors.textPrimary, fontWeight: '600', fontSize: 16 },
+    rowText: {
+      color: colors.textPrimary,
+      fontWeight: '600',
+      fontSize: 16,
+      flexShrink: 1, // Allow text to shrink if needed
+      marginRight: 12, // Space between label and buttons
+    },
     button: { padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 6 },
     closeButton: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
     saveButton: { backgroundColor: colors.accent },
@@ -523,14 +590,15 @@ const createStyles = ({ colors }: Theme) =>
     reorderName: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
     reorderButtons: { flexDirection: 'row', gap: 8 },
     arrow: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 36, // Fixed width - consistent touch target
+      height: 36, // Fixed height - matches applyButton
+      borderRadius: 18, // Half of width/height for circle
       backgroundColor: colors.surface,
       borderWidth: 2,
       borderColor: colors.accent,
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0, // Never shrink
     },
     arrowDisabled: { opacity: 0.35 },
     arrowText: {
@@ -554,15 +622,37 @@ const createStyles = ({ colors }: Theme) =>
     },
     removeRowSelected: { borderColor: colors.accent, backgroundColor: colors.surface },
     removeSelectedText: { color: colors.accent },
-    rowsControl: { alignItems: 'center' },
-    rowsButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    applyButton: {
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 10,
-      backgroundColor: colors.accent,
+    rowsControl: {
+      alignItems: 'center',
+      flexWrap: 'nowrap', // Never wrap - keep all controls on one line
     },
-    applyText: { color: colors.buttonText, fontWeight: '600', fontSize: 14 },
+    rowsButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8, // Consistent gap between buttons
+      flexShrink: 0, // Don't shrink the button container
+    },
+    applyButton: {
+      width: 52, // Fixed width for consistency
+      height: 36, // Fixed height - matches arrow buttons
+      borderRadius: 8,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    applyButtonDisabled: {
+      backgroundColor: colors.accent,
+      opacity: 0.35,
+    },
+    applyText: {
+      color: colors.buttonText,
+      fontWeight: '600',
+      fontSize: 13,
+      textAlign: 'center',
+    },
+    applyTextDisabled: {
+      opacity: 1, // Text opacity handled by button container
+    },
     disabledRow: { opacity: 0.5 },
     mutedText: { color: colors.textSecondary },
     mutedSmall: { color: colors.textSecondary, fontSize: 14 },

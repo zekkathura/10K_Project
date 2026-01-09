@@ -11,7 +11,7 @@ export interface Game {
   id: string;
   created_by_user_id: string;
   join_code: string;
-  status: 'active' | 'ended' | 'complete';
+  status: 'active' | 'ended' | 'complete'; // 'ended' is standard; 'complete' is legacy
    total_rounds?: number;
   finished_at: string | null;
   winning_player_id?: string | null;

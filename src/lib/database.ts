@@ -484,7 +484,7 @@ export async function addTurn(
       game_id: gameId,
       player_id: playerId,
       turn_number: finalTurnNumber,
-      score: isBust ? 0 : score,
+      score: score, // Preserve score even for busts (shows what they lost)
       is_bust: isBust,
       is_closed: isClosed,
       notes,
@@ -520,27 +520,19 @@ export async function addTurn(
 }
 
 export async function finishGame(gameId: string, winningPlayerId?: string | null, winningScore?: number | null) {
-  const updates = {
-    status: 'complete',
-    finished_at: new Date().toISOString(),
-    winning_player_id: winningPlayerId ?? null,
-    winning_score: typeof winningScore === 'number' ? winningScore : null,
-  };
+  const { data, error } = await supabase
+    .from('games')
+    .update({
+      status: 'ended',
+      finished_at: new Date().toISOString(),
+      winning_player_id: winningPlayerId ?? null,
+      winning_score: typeof winningScore === 'number' ? winningScore : null,
+    })
+    .eq('id', gameId)
+    .select()
+    .maybeSingle();
 
-  const { error, data } = await supabase.from('games').update(updates).eq('id', gameId).select().maybeSingle();
-
-  if (error) {
-    // Fallback to legacy status if "complete" is not allowed in the current schema/RLS
-    const fallback = await supabase
-      .from('games')
-      .update({ ...updates, status: 'ended' })
-      .eq('id', gameId)
-      .select()
-      .maybeSingle();
-    if (fallback.error) throw fallback.error;
-    return fallback.data as Game;
-  }
-
+  if (error) throw error;
   return data as Game;
 }
 
@@ -581,7 +573,12 @@ export async function deleteGame(gameId: string) {
     .delete()
     .eq('game_id', gameId);
 
-  if (turnsError) throw turnsError;
+  if (turnsError) {
+    const error = new Error(`Failed to delete turns: ${turnsError.message}`);
+    (error as any).step = 'delete_turns';
+    (error as any).originalError = turnsError;
+    throw error;
+  }
 
   // Delete all players for this game
   const { error: playersError } = await supabase
@@ -589,7 +586,12 @@ export async function deleteGame(gameId: string) {
     .delete()
     .eq('game_id', gameId);
 
-  if (playersError) throw playersError;
+  if (playersError) {
+    const error = new Error(`Failed to delete players: ${playersError.message}`);
+    (error as any).step = 'delete_players';
+    (error as any).originalError = playersError;
+    throw error;
+  }
 
   // Delete the game itself
   const { error: gameError } = await supabase
@@ -597,7 +599,12 @@ export async function deleteGame(gameId: string) {
     .delete()
     .eq('id', gameId);
 
-  if (gameError) throw gameError;
+  if (gameError) {
+    const error = new Error(`Failed to delete game: ${gameError.message}`);
+    (error as any).step = 'delete_game';
+    (error as any).originalError = gameError;
+    throw error;
+  }
 }
 
 /**

@@ -4,25 +4,61 @@
 
 **ALWAYS kill existing processes before starting Expo.** Multiple orphaned Metro bundlers cause port conflicts and confusion.
 
-### Required Pattern
+## Complete Workflow: Hot Dev on Android Emulator
+
+### Step 1: Kill Existing Process on Port 8081
 
 ```bash
-# 1. Find what's using the port
+# Method 1: Using kill-port (simplest, most reliable)
+npx kill-port 8081
+
+# Method 2: Find and kill manually
 netstat -ano | findstr ":8081.*LISTENING"
-
-# 2. Kill the process (use the PID from step 1)
-powershell -Command "Stop-Process -Id <PID> -Force -ErrorAction SilentlyContinue"
-
-# 3. Wait briefly, then start fresh
-sleep 2
-npx expo start --clear --port 8081
+# Note the PID, then:
+cmd /c "taskkill /F /PID <PID>"
 ```
 
-### One-Liner (Preferred)
+### Step 2: Verify Android Emulator is Running
 
 ```bash
-# Find and kill port 8081, then start Expo
-powershell -Command "Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"; sleep 2; npx expo start --clear --port 8081
+# Check connected devices
+adb devices
+# Should show: emulator-5554 device
+```
+
+**If no device shows:**
+- Open Android Studio → Device Manager → Start your virtual device
+- Or start from command line: `emulator -avd <device_name>`
+
+### Step 3: Start Expo Dev Server
+
+```bash
+cd /c/Users/blink/Documents/10K/10k-scorekeeper
+npm start -- --clear
+```
+
+This will:
+- Clear Metro bundler cache
+- Load environment from `.env`
+- Start server on http://localhost:8081
+
+### Step 4: Forward Port and Launch App
+
+```bash
+# Forward port 8081 from host to emulator
+adb -s emulator-5554 reverse tcp:8081 tcp:8081
+
+# Launch the dev client app
+adb -s emulator-5554 shell am start -n com.tenk.scorekeeper.dev/.MainActivity
+```
+
+The app will automatically connect to the Metro bundler and enable hot reloading.
+
+## One-Command Workflow
+
+```bash
+# Kill port, wait, start dev server (in background), forward port, launch app
+npx kill-port 8081 && sleep 2 && (cd /c/Users/blink/Documents/10K/10k-scorekeeper && npm start -- --clear &) && sleep 15 && adb -s emulator-5554 reverse tcp:8081 tcp:8081 && adb -s emulator-5554 shell am start -n com.tenk.scorekeeper.dev/.MainActivity
 ```
 
 ### Why `--clear`?
@@ -71,3 +107,54 @@ npx expo start --clear
 ## Default Port
 
 Always use **port 8081** as the standard. Don't let Expo auto-increment to 8082, 8083, etc.
+
+## Installed Apps on Emulator
+
+The emulator has two 10K Scorekeeper apps installed:
+
+| Package Name | Build Profile | Purpose | Connects to Metro? |
+|--------------|---------------|---------|-------------------|
+| `com.tenk.scorekeeper.dev` | development | **Hot dev** (use this!) | ✅ Yes |
+| `com.tenk.scorekeeper.previewdev` | preview-dev | Standalone testing | ❌ No |
+
+**For hot dev with instant code updates, always use `com.tenk.scorekeeper.dev`**
+
+## Troubleshooting
+
+### App Won't Connect to Metro
+
+1. **Check port forwarding:**
+   ```bash
+   adb -s emulator-5554 reverse --list
+   # Should show: tcp:8081 tcp:8081
+   ```
+
+2. **Restart Metro bundler:**
+   ```bash
+   npx kill-port 8081
+   npm start -- --clear
+   ```
+
+3. **Clear app data and restart:**
+   ```bash
+   adb -s emulator-5554 shell pm clear com.tenk.scorekeeper.dev
+   adb -s emulator-5554 shell am start -n com.tenk.scorekeeper.dev/.MainActivity
+   ```
+
+### Metro Bundler Stuck
+
+If you see "Waiting on http://localhost:8081" with no progress:
+- Kill and restart (npx kill-port 8081)
+- Check no other Node processes are running (Task Manager)
+- Delete `.expo` folder and restart
+
+### Wrong App Version Showing
+
+You might have the wrong app (preview-dev instead of dev):
+```bash
+# Uninstall preview-dev if you want clean environment
+adb -s emulator-5554 uninstall com.tenk.scorekeeper.previewdev
+
+# Launch dev client explicitly
+adb -s emulator-5554 shell am start -n com.tenk.scorekeeper.dev/.MainActivity
+```

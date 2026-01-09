@@ -14,6 +14,7 @@ import { AUTH_STORAGE_KEYS, AUTH_TIMEOUTS, AUTH_ERROR_CODES } from './lib/authCo
 import { ProfileCheckResult } from './lib/authTypes';
 import { raceWithTimeout, sleep } from './lib/asyncUtils';
 import { checkAppVersion, getStoreUrl, VersionCheckResult } from './lib/versionCheck';
+import { useNetwork } from './lib/useNetwork';
 
 // Error Boundary to catch crashes and display error screen instead of closing
 interface ErrorBoundaryProps {
@@ -252,6 +253,45 @@ function UpdateRequiredModal({
   );
 }
 
+// Offline Modal Component - blocks app when no internet connection
+interface OfflineModalProps {
+  visible: boolean;
+  onRetry: () => void;
+}
+
+function OfflineModal({ visible, onRetry }: OfflineModalProps) {
+  const styles = useThemedStyles(createModalStyles);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={undefined} // Block back button - must restore connection
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>No Internet Connection</Text>
+          <Text style={[styles.modalSubtitle, { textAlign: 'center', marginBottom: 20 }]}>
+            10K Scorekeeper requires an internet connection to sync game data with other players.
+            {'\n\n'}
+            Please check your connection and try again.
+          </Text>
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.confirmButton, { flex: 1 }]}
+              onPress={onRetry}
+            >
+              <Text style={styles.confirmButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // Loading status for progress display - exported for LoginScreen
 export type LoadingStatus =
   | 'initializing'      // App starting up
@@ -276,6 +316,9 @@ export default function App() {
   // Version check state
   const [versionCheckResult, setVersionCheckResult] = useState<VersionCheckResult | null>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+
+  // Network connectivity state
+  const { isOffline, refresh: refreshNetwork } = useNetwork();
 
   // Track if this is a fresh OAuth callback
   // On web: check URL hash for access_token (captured BEFORE Supabase consumes it)
@@ -756,18 +799,23 @@ export default function App() {
       }
 
       let error;
+      let savedProfile = null;
+
       if (existingProfile) {
-        // Profile exists - update it
+        // Profile exists - update it and return the updated row
         const result = await supabase
           .from('profiles')
           .update({
             display_name: trimmedName,
             email: pendingUser.email,
           })
-          .eq('id', pendingUser.id);
+          .eq('id', pendingUser.id)
+          .select('id, display_name')
+          .single();
         error = result.error;
+        savedProfile = result.data;
       } else {
-        // Profile doesn't exist - insert it
+        // Profile doesn't exist - insert it and return the inserted row
         const result = await supabase
           .from('profiles')
           .insert({
@@ -775,8 +823,11 @@ export default function App() {
             email: pendingUser.email,
             display_name: trimmedName,
             full_name: fullName, // Immutable, for admin reference only
-          });
+          })
+          .select('id, display_name')
+          .single();
         error = result.error;
+        savedProfile = result.data;
       }
 
       if (error) {
@@ -803,7 +854,32 @@ export default function App() {
         return;
       }
 
-      logger.debug('Profile created successfully');
+      // Verify the profile was actually created/updated
+      if (!savedProfile) {
+        logger.error('Profile operation returned no data - verifying...');
+
+        // Do a verification query to check if profile exists
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .eq('id', pendingUser.id)
+          .single();
+
+        if (verifyError || !verifyData) {
+          logger.error('Profile verification failed:', verifyError);
+          const alertMsg = 'Profile creation could not be verified. Please try signing out and back in.';
+          if (Platform.OS === 'web') {
+            window.alert(alertMsg);
+          } else {
+            Alert.alert('Error', alertMsg);
+          }
+          return;
+        }
+
+        logger.debug('Profile verified via secondary query:', verifyData.display_name);
+      } else {
+        logger.debug('Profile created/updated successfully:', savedProfile.display_name);
+      }
       // Clear setup state - user can now proceed to home
       setNeedsProfileSetup(false);
       setPendingUser(null);
@@ -857,6 +933,12 @@ export default function App() {
               versionInfo={versionCheckResult}
               onUpdate={handleOpenStore}
               onDismiss={versionCheckResult?.forceUpdate || versionCheckResult?.maintenanceMode ? undefined : handleDismissUpdate}
+            />
+
+            {/* Offline Modal - blocks app when no internet connection */}
+            <OfflineModal
+              visible={isOffline}
+              onRetry={refreshNetwork}
             />
           </ThemedAlertProvider>
         </ThemeProvider>

@@ -1,264 +1,232 @@
-# Local Build Skill
+# Build Skill
 
-Use when building Android APKs locally via WSL (no EAS cloud quota limits).
+Build Android APKs/AABs locally via WSL, and iOS via EAS cloud.
 
-## Pre-built Files (Use First!)
+**Key Rule:** Android = local WSL builds only. iOS = EAS cloud builds only.
 
-**Check `build/` directory before rebuilding.** These files should exist:
+## IMPORTANT: EAS CLI Command
 
-| File | Profile | Database | Format | Use Case |
-|------|---------|----------|--------|----------|
-| `build/10k-dev.apk` | development | 10k-dev | APK | Dev client (requires Metro) |
-| `build/10k-preview-dev.apk` | preview-dev | 10k-dev | APK | E2E testing (standalone) |
-| `build/10k-production.aab` | production | 10k-prod | AAB | Google Play Store upload |
+**ALWAYS use `npx eas-cli` instead of `eas`** - the `eas` command may not be in PATH.
 
-**Note:** Production builds create an `.aab` (Android App Bundle), not `.apk`. Google Play requires AAB format. You cannot install an AAB directly on a device.
-
-**Quick install existing APK:**
 ```bash
-adb install -r build/10k-preview-dev.apk
+# ❌ WRONG - may fail with "command not found"
+eas build --profile production --platform ios
+
+# ✅ CORRECT - always works
+npx eas-cli build --profile production --platform ios
+```
+
+## Build Folder Structure
+
+```
+build/
+├── 10k-dev-v{VER}-b{BUILD}.apk           # Development (requires Metro)
+├── 10k-preview-dev-v{VER}-b{BUILD}.apk   # Preview-dev (standalone, 10k-dev DB)
+├── 10k-production-v{VER}-b{BUILD}.aab    # Production Android (Google Play)
+├── 10k-production-v{VER}-b{BUILD}.ipa    # Production iOS (App Store)
+└── archive/                               # Old builds moved here
+```
+
+**Only ONE file of each type exists in `build/` at a time.** Old versions go to `archive/`.
+
+## Build File Types
+
+| Profile | Platform | Filename Pattern | Database | Format | Use Case |
+|---------|----------|------------------|----------|--------|----------|
+| `development` | Android | `10k-dev-v{VER}-b{BUILD}.apk` | 10k-dev | APK | Dev client (requires Metro) |
+| `preview-dev` | Android | `10k-preview-dev-v{VER}-b{BUILD}.apk` | 10k-dev | APK | Standalone testing |
+| `production` | Android | `10k-production-v{VER}-b{BUILD}.aab` | 10k-prod | AAB | Google Play upload |
+| `production` | iOS | `10k-production-v{VER}-b{BUILD}.ipa` | 10k-prod | IPA | App Store / TestFlight |
+
+**Examples:**
+- Android: `10k-preview-dev-v1.0.1-b5.apk`
+- iOS: `10k-production-v1.0.8-b15.ipa`
+
+## Build Workflow (Claude Code MUST Follow)
+
+When asked to build, follow this process:
+
+### Step 1: Check for Existing File
+
+```bash
+# Use Glob to find existing files of same profile type
+Glob pattern: build/10k-{profile}*.apk  (or *.aab for production)
+```
+
+### Step 2: Archive or Overwrite Decision
+
+| Existing File | New Build | Action |
+|---------------|-----------|--------|
+| `v1.0.1-b5` | `v1.0.1-b5` | **Overwrite** (same version+build) |
+| `v1.0.1-b4` | `v1.0.1-b5` | **Archive** existing, then build |
+| `v1.0.0-b3` | `v1.0.1-b5` | **Archive** existing, then build |
+| None | Any | Build directly |
+
+### Step 3: Archive (if needed)
+
+```bash
+# Move existing file to archive (PowerShell)
+powershell -Command "Move-Item -Path 'build/10k-preview-dev-v*.apk' -Destination 'build/archive/' -Force"
+```
+
+### Step 4: Update Version (if needed)
+
+Before building, update `app.config.js`:
+- `APP_VERSION` - User specifies (recommend +0.0.1)
+- `BUILD_NUMBER` - Auto-increment by 1
+
+### Step 5: Build
+
+```bash
+wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/Android/Sdk && export ANDROID_SDK_ROOT=/mnt/c/Users/blink/AppData/Local/Android/Sdk && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas-cli build --profile {PROFILE} --platform android --local --output ./build/{FILENAME} --non-interactive"
+```
+
+Replace:
+- `{PROFILE}` - `preview-dev`, `development`, or `production`
+- `{FILENAME}` - `10k-{profile}-v{VER}-b{BUILD}.apk` (or `.aab` for production)
+
+**Note:** Uses Windows Android SDK at `/mnt/c/Users/blink/AppData/Local/Android/Sdk`
+
+## Quick Examples
+
+### Preview-dev Build
+```bash
+# Filename: 10k-preview-dev-v1.0.1-b5.apk
+wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/Android/Sdk && export ANDROID_SDK_ROOT=/mnt/c/Users/blink/AppData/Local/Android/Sdk && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas-cli build --profile preview-dev --platform android --local --output ./build/10k-preview-dev-v1.0.1-b5.apk --non-interactive"
+```
+
+### Production Build
+```bash
+# Filename: 10k-production-v1.0.4-b9.aab
+wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/mnt/c/Users/blink/AppData/Local/Android/Sdk && export ANDROID_SDK_ROOT=/mnt/c/Users/blink/AppData/Local/Android/Sdk && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && npx eas-cli build --profile production --platform android --local --output ./build/10k-production-v1.0.4-b9.aab --non-interactive"
+```
+
+## Installing APK
+
+```bash
+# Install on connected device
+adb install -r build/10k-preview-dev-v1.0.1-b5.apk
+
+# Launch app
 adb shell am start -n com.tenk.scorekeeper.previewdev/.MainActivity
 ```
 
-Only rebuild if code changes need testing on native device.
+**Note:** AAB files cannot be installed directly - they're for Google Play upload only.
 
-## Overview
+## App Names on Device
 
-Local builds run in WSL (Windows Subsystem for Linux) and produce APKs without using EAS cloud build quota. This enables unlimited builds for testing.
+| Profile | App Name | Package ID |
+|---------|----------|------------|
+| development | DEV - 10K Scorekeeper | com.tenk.scorekeeper.dev |
+| preview-dev | PREVIEW DEV - 10K Scorekeeper | com.tenk.scorekeeper.previewdev |
+| production | 10K Scorekeeper | com.tenk.scorekeeper |
 
-**⚠️ IMPORTANT: Local builds do NOT include R8/ProGuard mapping files.** Google Play will show a deobfuscation warning and crash reports will be obfuscated. This is fine for internal testing, but **for official production releases, use EAS cloud builds instead:**
-```bash
-eas build --profile production --platform android   # Cloud build - includes mapping files
-```
+## Prerequisites (Already Configured)
 
-## Prerequisites (Already Installed)
+**Windows:**
+- Android SDK at `C:\Users\blink\AppData\Local\Android\Sdk`
+- ADB in PATH
 
-WSL Ubuntu environment with:
-- **Node.js 20** - JavaScript runtime
-- **Java JDK 17** - Required by Gradle (`/usr/lib/jvm/java-17-openjdk-amd64`)
-- **Android SDK** - `~/android-sdk` with:
-  - cmdline-tools/latest
-  - build-tools (34.0.0, 35.0.0, 36.0.0)
-  - platforms (android-34, android-36)
-  - platform-tools
-  - ndk/27.1.12297006
-  - cmake/3.22.1
-- **EAS CLI** - Expo Application Services CLI
+**WSL Ubuntu:**
+- Node.js 20+
+- EAS CLI logged in (`tuesdaylabs` account)
 
-## Automated Build (Claude Code)
+## Important Notes
 
-**IMPORTANT:** Use explicit inline exports (not `source ~/.profile`) because WSL's PATH contains Windows paths with parentheses that break bash.
+1. **Uses Windows Android SDK** - WSL accesses it at `/mnt/c/Users/blink/AppData/Local/Android/Sdk`
+2. **First production build** requires interactive keystore generation (user runs manually)
+3. **Build time:** First build ~10-15 min, subsequent ~3-5 min
+4. **Credentials:** `credentials.json` contains signing keystore - keep safe
+5. **Use `-d Ubuntu`** in WSL commands to avoid Windows path issues
 
-### Build Command (Verified Working)
-```bash
-wsl -d Ubuntu -e bash -c "export ANDROID_HOME=/home/blink/android-sdk && export ANDROID_SDK_ROOT=/home/blink/android-sdk && export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && export PATH=/home/blink/android-sdk/cmdline-tools/latest/bin:/home/blink/android-sdk/platform-tools:/usr/local/bin:/usr/bin:/bin && export EXPO_TOKEN=<token> && cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper && eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev.apk --non-interactive 2>&1"
-```
+## iOS Builds (EAS Cloud)
 
-**Key points:**
-- Use absolute paths (`/home/blink/android-sdk` not `~/android-sdk`)
-- Set minimal clean PATH (avoid Windows paths with spaces/parentheses)
-- Add `2>&1` to capture both stdout and stderr
+iOS builds **require EAS cloud** because they need macOS for compilation.
 
-### Build Profiles
-| Profile | App ID | Supabase | Use Case |
-|---------|--------|----------|----------|
-| `preview-dev` | `com.tenk.scorekeeper.previewdev` | 10k-dev | E2E testing |
-| `preview` | `com.tenk.scorekeeper.preview` | 10k-prod | Internal testing |
-| `production` | `com.tenk.scorekeeper` | 10k-prod | App Store |
-
-## Manual Build (User)
-
-Open WSL terminal and run:
+### iOS Build Command
 
 ```bash
-# Navigate to project
-cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
-
-# Build preview-dev APK (uses 10k-dev Supabase)
-eas build --profile preview-dev --platform android --local --output ./build/10k-preview-dev.apk
-
-# Build preview APK (uses 10k-prod Supabase)
-eas build --profile preview --platform android --local --output ./build/10k-preview.apk
-
-# Build production AAB (for Google Play)
-eas build --profile production --platform android --local --output ./build/10k-production.aab
+# From project directory on Windows
+cd "c:\Users\blink\Documents\10K\10k-scorekeeper"
+npx eas-cli build --profile production --platform ios --non-interactive
 ```
 
-## Production Build (First Time - Keystore Setup)
+**Note:** The build is queued on EAS servers. Free tier has a queue; paid plans get priority.
 
-The first production build requires **interactive keystore generation**. This must be run by the user in WSL terminal (Claude Code cannot run this non-interactively).
+### IMPORTANT: Submit to App Store Connect After Build
 
-### First-Time Production Build
+**Claude Code MUST submit the build to App Store Connect immediately after the iOS build completes.**
+
+Downloading the IPA is just a local backup - the build must be submitted to appear in TestFlight/App Store Connect.
 
 ```bash
-# Open WSL terminal and run:
-cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
-eas build --profile production --platform android --local --output ./build/10k-production.aab
+# Submit the latest iOS build to App Store Connect
+npx eas-cli submit --platform ios --latest --non-interactive
 ```
 
-**When prompted:** "Generate a new Android Keystore?" → Press **Y**
+This uploads the build to Apple. Processing takes ~5-10 minutes, then it appears in TestFlight.
 
-The keystore will be:
-- Saved locally in `credentials.json` (gitignored)
-- Backed up to EAS servers for future cloud builds
-- Required for ALL future updates to this app on Google Play
+### iOS Build Output
 
-### Subsequent Production Builds
+- Build runs on EAS cloud (macOS servers)
+- Creates `.ipa` file stored on EAS
+- Download from: EAS dashboard or the URL provided after build completes
+- Submit to TestFlight: `npx eas-cli submit --platform ios`
 
-After the keystore exists, production builds work the same as other profiles:
-```bash
-cd /mnt/c/Users/blink/Documents/10K/10k-scorekeeper
-eas build --profile production --platform android --local --output ./build/10k-production.aab
+### Post-Build: Move IPA to Build Folder
+
+**IMPORTANT:** After downloading an iOS build, Claude Code MUST move it to the build folder with proper naming.
+
+The downloaded IPA will have a generic name like `application-{BUILD_ID}.ipa`. Rename and move it:
+
+```powershell
+# Find the downloaded IPA (usually in Downloads)
+powershell -Command "Get-ChildItem -Path 'c:\Users\blink\Downloads\' -Filter '*.ipa' | Select-Object Name, LastWriteTime"
+
+# Move and rename to build folder (match Android naming convention)
+powershell -Command "Move-Item -Path 'c:\Users\blink\Downloads\application-{BUILD_ID}.ipa' -Destination 'c:\Users\blink\Documents\10K\10k-scorekeeper\build\10k-production-v{VER}-b{BUILD}.ipa' -Force"
 ```
 
-### Important Notes
-
-- **Keep `credentials.json` safe** - Contains your signing keystore. Back it up securely.
-- **Same keystore required forever** - Google Play requires the same signing key for all app updates
-- **AAB format** - Production builds create `.aab` (Android App Bundle), not `.apk`
-- **Cannot install AAB directly** - AAB is for Google Play upload only; use preview builds for device testing
-
-## Output Locations
-
-Build files are output to the `build/` directory with versioned names:
-- `build/10k-dev.apk` - Development client APK (requires Metro server)
-- `build/10k-preview-dev.apk` - Standalone testing APK (10k-dev database)
-- `build/10k-production-v{VERSION}-b{BUILD_NUMBER}.aab` - Google Play bundle (10k-prod database)
-
-**Naming Convention for Production AABs:**
-- Format: `10k-production-v{APP_VERSION}-b{BUILD_NUMBER}.aab`
-- Example: `10k-production-v1.0.1-b4.aab`
-
-**⚠️ REQUIRED: Production Build Workflow (Claude Code MUST follow):**
-
-Before building a new production AAB, Claude Code must:
-
-1. **Ask user for version number** using AskUserQuestion tool:
-   - Show current version (e.g., "Current: 1.0.0")
-   - Recommend incrementing last digit by 0.0.1 (e.g., "1.0.1 (Recommended)")
-   - Let user specify custom version
-
-2. **Auto-increment BUILD_NUMBER** by 1 in `app.config.js`
-
-3. **Archive existing AABs** - Move all `.aab` files from `build/` to `build/archive/`
-
-4. **Build new AAB** with versioned filename
-
-Example interaction:
+**iOS build files in `build/` folder:**
 ```
-Claude: "Current version is 1.0.0, build 3. What version for the new release?"
-Options: "1.0.1 (Recommended)", "1.1.0", "2.0.0", "Other"
-User selects or enters version
-Claude: Updates APP_VERSION and BUILD_NUMBER, archives old AABs, builds new one
+build/
+├── 10k-production-v1.0.8-b15.aab    # Android (Google Play)
+├── 10k-production-v1.0.8-b15.ipa    # iOS (App Store)
+└── archive/                          # Old builds
 ```
 
-### Finding Build Files (Claude Code)
+**Archive old IPAs** before moving new one (same as Android workflow).
 
-**Use Glob tool** to reliably find build files (avoids Windows path escaping issues):
-```
-# Find APKs
-Glob pattern: build/**/*.apk
-Path: c:\Users\blink\Documents\10K\10k-scorekeeper
+### iOS Credentials
 
-# Find AAB (production)
-Glob pattern: build/**/*.aab
-Path: c:\Users\blink\Documents\10K\10k-scorekeeper
-```
+Credentials are managed by EAS (stored on Expo servers):
+- Distribution Certificate
+- Provisioning Profile
+- Push Notification keys (if needed)
 
-**Don't use** `dir` or `ls` commands for build files - path escaping between bash/cmd/PowerShell is unreliable.
+First build prompts for Apple Developer credentials. After setup, builds work non-interactively.
 
-### Paths by Context
-
-| Context | Path Format |
-|---------|-------------|
-| Windows/Claude | `c:\Users\blink\Documents\10K\10k-scorekeeper\build\` |
-| WSL | `/mnt/c/Users/blink/Documents/10K/10k-scorekeeper/build/` |
-| ADB install | `build/10k-preview-dev.apk` (relative from project root) |
-
-## Installing APK on Device
-
-### Via ADB (device connected via USB)
-```bash
-# From Windows
-adb install -r build/10k-preview-dev.apk
-
-# Or copy to phone and install manually
-```
-
-### Direct Download
-Transfer APK to phone via:
-- USB file transfer
-- Cloud storage (Google Drive, etc.)
-- Local network share
-
-## Build Time Estimates
-
-- **First build**: 10-15 minutes (downloads Gradle, SDK components)
-- **Subsequent builds**: 3-5 minutes (cached dependencies)
-
-## Troubleshooting
-
-### Build stuck on "Installing SDK Platform XX"
-**Cause:** Gradle auto-downloads missing SDK components, which can hang.
-**Fix:** Pre-install required SDK components:
-```bash
-wsl -d Ubuntu -- bash -c "yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-36' 'build-tools;36.0.0'"
-```
-
-### "Expo user account required"
-Run `eas login` in WSL terminal, or ensure EXPO_TOKEN is set in the build command.
-
-### "ANDROID_HOME not set"
-Use explicit inline exports in the build command (don't rely on ~/.profile).
-
-### "syntax error near unexpected token `('"
-**Cause:** WSL's PATH inherited from Windows contains paths with parentheses like `Program Files (x86)`.
-**Fix:** Set a clean minimal PATH explicitly in your build command instead of appending to existing PATH.
-
-### "SDK license not accepted"
-Run in WSL:
-```bash
-yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-```
-
-### Gradle download slow
-First build downloads ~200MB Gradle distribution. Subsequent builds use cache (~3-5 min).
-
-## EXPO_TOKEN Management
-
-Token location: https://expo.dev/accounts/tuesdaylabs/settings/access-tokens
-
-To create new token:
-1. Go to Expo dashboard
-2. Settings > Access Tokens
-3. Create Token
-4. Add to `~/.profile` in WSL
-
-## Quick Reference
+### Checking iOS Build Status
 
 ```bash
-# Check WSL environment
-wsl -d Ubuntu -- bash -c "node -v && java -version 2>&1 | head -1"
+# Check build status
+npx eas-cli build:list --platform ios --limit 5
 
-# List installed SDK components
-wsl -d Ubuntu -- bash -c "~/android-sdk/cmdline-tools/latest/bin/sdkmanager --list_installed 2>&1 | grep -E '(platforms|build-tools|ndk|cmake)'"
-
-# Pre-install SDK components (run before first build to avoid hangs)
-wsl -d Ubuntu -- bash -c "yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager 'platforms;android-36' 'build-tools;36.0.0'"
+# View specific build
+npx eas-cli build:view {BUILD_ID}
 ```
 
-## Lessons Learned
+### Complete iOS Build Workflow
 
-1. **Don't source ~/.profile** - WSL inherits Windows PATH with parentheses that break bash. Use explicit inline exports.
+**After iOS build finishes, Claude Code should do ALL of the following:**
 
-2. **Pre-install SDK components** - Gradle auto-download can hang. Install platforms/build-tools beforehand.
+1. **Submit to App Store Connect** (required for TestFlight):
+   ```bash
+   npx eas-cli submit --platform ios --latest --non-interactive
+   ```
 
-3. **Use absolute paths** - `~/android-sdk` can fail in non-interactive shells. Use `/home/blink/android-sdk`.
+2. **Download and archive IPA** (optional local backup):
+   - User downloads IPA from EAS dashboard
+   - Claude moves it to `build/` folder with proper naming
 
-4. **Set clean minimal PATH** - Only include essential Linux paths + Android SDK paths to avoid Windows path pollution.
-
-5. **First build is slow** - Downloads Gradle (~200MB), NDK, CMake. Subsequent builds use cache (3-5 min).
-
-6. **Use Glob tool for finding files** - `dir` and `ls` commands have path escaping issues on Windows. Use the Glob tool with pattern `build/**/*.apk` to reliably find APK files.
-
-7. **Production builds need keystore** - First production build requires interactive keystore generation (user must run in WSL terminal). Subsequent builds work normally. Back up `credentials.json` securely.
+3. **Inform user** that build will appear in TestFlight in ~5-10 minutes

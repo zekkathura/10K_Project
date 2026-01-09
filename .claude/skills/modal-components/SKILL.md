@@ -136,6 +136,71 @@ For settings-like screens:
 </Modal>
 ```
 
+## Safe Area Handling for Modals
+
+### Centered Modals (no safe area needed)
+
+Centered modals use `justifyContent: 'center'` with padding, so they naturally stay away from edges:
+
+```typescript
+modalOverlay: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,  // Keeps content away from edges
+}
+```
+
+### Full-Screen Card Modals (safe area required)
+
+For modals where the card can extend closer to screen edges (like GameSettingsModal):
+
+```typescript
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+function FullScreenCardModal({ visible, onClose }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={[
+        styles.overlay,
+        {
+          paddingTop: Math.max(20, insets.top + 10),
+          paddingBottom: Math.max(20, insets.bottom + 10),
+          paddingLeft: Math.max(20, insets.left),
+          paddingRight: Math.max(20, insets.right),
+        }
+      ]}>
+        <View style={styles.card}>
+          <ScrollView style={styles.cardContent}>
+            {/* Content */}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,  // Base padding, overridden by dynamic values
+  },
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '100%',  // Respects overlay padding
+    // ...
+  },
+});
+```
+
+See **GameSettingsModal.tsx** for a complete example.
+
 ## Modal Best Practices
 
 ### 1. Always Provide Close Mechanism

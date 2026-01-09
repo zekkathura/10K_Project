@@ -27,6 +27,7 @@ export interface ThemeColors {
   // Accents & Status
   accent: string;
   accentLight: string;
+  accentPurple: string;
   error: string;
   errorBackground: string;
   success: string;
@@ -68,6 +69,7 @@ const lightColors: ThemeColors = {
   // Accents & Status
   accent: '#4A78FF',
   accentLight: '#90A9FF',
+  accentPurple: '#9B59B6',
   error: '#FF4444',
   errorBackground: '#FFE8E8',
   success: '#4CAF50',
@@ -104,6 +106,7 @@ const darkColors: ThemeColors = {
   // Accents & Status
   accent: '#4A78FF',
   accentLight: '#90A9FF',
+  accentPurple: '#D99CE3',
   error: '#FF4444',
   errorBackground: '#2c090c',
   success: '#4CAF50',

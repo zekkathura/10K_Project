@@ -5,9 +5,15 @@
  * Used to prompt users to update when breaking changes are deployed.
  */
 
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { logger } from './logger';
 import Constants from 'expo-constants';
+
+// Store URLs - update APP_STORE_ID once iOS app is published
+const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.tenk.scorekeeper';
+const APP_STORE_ID = 'YOUR_APP_STORE_ID'; // TODO: Update after iOS App Store submission
+const APP_STORE_URL = `https://apps.apple.com/app/id${APP_STORE_ID}`;
 
 export interface VersionCheckResult {
   needsUpdate: boolean;
@@ -117,9 +123,14 @@ export async function checkAppVersion(): Promise<VersionCheckResult> {
 }
 
 /**
- * Get the Google Play Store URL for updates
- * Note: Android only - no iOS release planned
+ * Get the appropriate app store URL based on platform
+ * - iOS: Apple App Store
+ * - Android: Google Play Store
+ * - Web: Falls back to Google Play (most common mobile platform)
  */
 export function getStoreUrl(): string {
-  return 'https://play.google.com/store/apps/details?id=com.tenk.scorekeeper';
+  if (Platform.OS === 'ios') {
+    return APP_STORE_URL;
+  }
+  return GOOGLE_PLAY_URL;
 }

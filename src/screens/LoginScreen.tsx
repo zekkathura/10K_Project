@@ -19,7 +19,7 @@ import { ThemedLoader } from '../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
 import { Theme, useThemedStyles } from '../lib/theme';
-import { signInWithGoogle } from '../lib/auth';
+import { signInWithGoogle, signInWithApple } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { AUTH_STORAGE_KEYS, APP_SCHEME } from '../lib/authConfig';
@@ -159,6 +159,30 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
     }
   };
 
+  const handleAppleSignIn = async () => {
+    try {
+      const result = await signInWithApple();
+
+      if (!result.success) {
+        const errorMsg = typeof result.error === 'string'
+          ? result.error
+          : 'Failed to sign in with Apple';
+        if (errorMsg !== 'Authentication cancelled') {
+          showAlert('Error', errorMsg);
+        }
+        return;
+      }
+
+      // Show full-screen loader - onAuthStateChange in App.tsx will handle navigation
+      setLoading(true);
+      setLoadingMessage('');
+      logger.debug('Apple sign-in successful, waiting for session...');
+    } catch (error) {
+      showAlert('Error', 'An unexpected error occurred');
+      logger.error('Apple sign-in error', error);
+    }
+  };
+
   const handleEmailSignIn = async () => {
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
@@ -226,19 +250,36 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
       if (data.user) {
         logger.debug('Creating profile for email signup');
 
-        const { error: profileError } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: data.user.id,
             email: trimmedEmail,
             display_name: trimmedDisplayName,
-          });
+          })
+          .select('id, display_name')
+          .single();
 
         if (profileError) {
           logger.error('Profile creation error', profileError);
-          showAlert('Profile Error', 'Profile creation failed. You may need to set your display name in Settings.');
+          showAlert('Profile Error', `Profile creation failed (${profileError.code || 'unknown'}). You may need to set your display name in Settings.`);
+        } else if (!profileData) {
+          // Insert returned no data - verify it was created
+          logger.warn('Profile insert returned no data, verifying...');
+          const { data: verifyData, error: verifyError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', data.user.id)
+            .single();
+
+          if (verifyError || !verifyData) {
+            logger.error('Profile verification failed:', verifyError);
+            showAlert('Profile Error', 'Profile creation could not be verified. You may need to set your display name in Settings.');
+          } else {
+            logger.debug('Profile verified via secondary query');
+          }
         } else {
-          logger.debug('Profile created successfully for email signup');
+          logger.debug('Profile created successfully for email signup:', profileData.display_name);
         }
       }
 
@@ -414,9 +455,11 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
                   secureTextEntry={!showPassword}
                   placeholder="Enter password"
                   placeholderTextColor={styles.inputPlaceholder.color}
-                  textContentType="password"
+                  textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  spellCheck={false}
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
                   accessibilityLabel="Password"
@@ -451,9 +494,11 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
                       secureTextEntry={!showConfirmPassword}
                       placeholder="Confirm password"
                       placeholderTextColor={styles.inputPlaceholder.color}
-                      textContentType="password"
+                      textContentType="newPassword"
+                      autoComplete="new-password"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      spellCheck={false}
                       onFocus={() => setConfirmPasswordFocused(true)}
                       onBlur={() => setConfirmPasswordFocused(false)}
                       accessibilityLabel="Confirm password"
@@ -548,6 +593,23 @@ export default function LoginScreen({ initializing = false, loadingStatus = null
                 accessibilityElementsHidden={true}
               />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.appleButton, buttonsDisabled && styles.appleButtonDisabled]}
+              onPress={handleAppleSignIn}
+              disabled={buttonsDisabled}
+              accessibilityLabel="Continue with Apple"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: buttonsDisabled }}
+            >
+              <Image
+                source={require('../../assets/images/apple_logo.png')}
+                style={styles.appleLogoImage}
+                resizeMode="contain"
+                accessibilityElementsHidden={true}
+              />
+              <Text style={styles.appleButtonText}>Continue with Apple</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -847,6 +909,31 @@ const createStyles = ({ colors, mode }: Theme) =>
       opacity: 0.5,
     },
     googleButtonText: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    appleButton: {
+      backgroundColor: 'transparent',
+      paddingVertical: 10,
+      borderRadius: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.border,
+      marginTop: 10,
+    },
+    appleButtonDisabled: {
+      opacity: 0.5,
+    },
+    appleLogoImage: {
+      width: 18,
+      height: 18,
+      marginRight: 10,
+      tintColor: colors.textPrimary,
+    },
+    appleButtonText: {
       color: colors.textPrimary,
       fontSize: 13,
       fontWeight: '600',

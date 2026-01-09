@@ -11,14 +11,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { ThemedLoader, useThemedAlert } from '../components';
-import { supabase } from '../lib/supabase';
+import { supabase, getServerName } from '../lib/supabase';
 import { deleteAccount } from '../lib/database';
 import { logger } from '../lib/logger';
 import type { Profile } from '../lib/types';
 import { ThemeMode, useTheme, useThemedStyles } from '../lib/theme';
+import FeedbackModal from './FeedbackModal';
 
-// Privacy Policy URL - Update this when you host your privacy policy
-const PRIVACY_POLICY_URL = 'https://10kscorekeeper.com/privacy';
+// Privacy Policy URL - hosted on Google Sites
+const PRIVACY_POLICY_URL = 'https://sites.google.com/view/10kscorekeeper-privacy-policy/home';
 
 interface SettingsScreenProps {
   navigation: { goBack: () => void };
@@ -33,6 +34,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const { theme, mode, setMode } = useTheme();
   const insets = useSafeAreaInsets();
   const alert = useThemedAlert();
@@ -44,6 +46,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   const appVersion = Constants.expoConfig?.version || '1.0.0';
   const buildNumber = Constants.expoConfig?.extra?.buildNumber || 1;
   const environment = Constants.expoConfig?.extra?.environment || 'production';
+  const serverName = getServerName();
 
   useEffect(() => {
     loadProfile();
@@ -214,7 +217,7 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: 20 + insets.bottom }]}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <Text style={styles.menuLabel}>Settings</Text>
         <TouchableOpacity
@@ -256,54 +259,58 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
         {/* Account Section */}
         <Text style={styles.sectionHeader}>Account</Text>
         <View style={styles.section}>
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.emailText}>{profile?.email}</Text>
-        </View>
+          {/* Email Row */}
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>Email</Text>
+            <Text style={styles.aboutValue}>{profile?.email}</Text>
+          </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Display Name</Text>
-          <Text style={styles.helperText}>
-            This name will be used when you join games
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            onBlur={() => setDisplayName(displayName.trim())}
-            placeholder="Enter display name"
-            autoCapitalize="words"
-            maxLength={50}
-            accessibilityLabel="Display name"
-            accessibilityHint="Your name shown to other players"
-          />
+          {/* Display Name Row */}
+          <View style={styles.aboutRowSeparator}>
+            <Text style={styles.aboutLabel}>Display Name</Text>
+            <Text style={styles.helperText}>
+              This name will be used when you join games
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={displayName}
+              onChangeText={setDisplayName}
+              onBlur={() => setDisplayName(displayName.trim())}
+              placeholder="Enter display name"
+              autoCapitalize="words"
+              maxLength={50}
+              accessibilityLabel="Display name"
+              accessibilityHint="Your name shown to other players"
+            />
 
-          {hasChanges && (
-            <View style={styles.inlineActionBar}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={handleCancel}
-                accessibilityLabel="Cancel changes"
-                accessibilityRole="button"
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
+            {hasChanges && (
+              <View style={styles.inlineActionBar}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleCancel}
+                  accessibilityLabel="Cancel changes"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.applyButton, saving && styles.applyButtonDisabled]}
-                onPress={handleSave}
-                disabled={saving}
-                accessibilityLabel="Apply changes"
-                accessibilityRole="button"
-                accessibilityState={{ disabled: saving }}
-              >
-                {saving ? (
-                  <ThemedLoader mode="inline" color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.applyButtonText}>Apply</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+                <TouchableOpacity
+                  style={[styles.applyButton, saving && styles.applyButtonDisabled]}
+                  onPress={handleSave}
+                  disabled={saving}
+                  accessibilityLabel="Apply changes"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving }}
+                >
+                  {saving ? (
+                    <ThemedLoader mode="inline" color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.applyButtonText}>Apply</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* About Section */}
@@ -312,10 +319,33 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Version</Text>
             <Text style={styles.aboutValue}>
-              {appVersion} ({buildNumber})
+              {appVersion} (build {buildNumber})
               {environment !== 'production' && ` - ${environment}`}
             </Text>
           </View>
+          <View style={[styles.aboutRow, styles.aboutRowSeparator]}>
+            <Text style={styles.aboutLabel}>Server</Text>
+            <Text style={[
+              styles.aboutValue,
+              serverName === '10K-prod' ? styles.serverProd : styles.serverDev
+            ]}>
+              {serverName}
+            </Text>
+          </View>
+        </View>
+
+        {/* Support Section */}
+        <Text style={styles.sectionHeader}>Support</Text>
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => setShowFeedback(true)}
+            accessibilityLabel="Send Feedback"
+            accessibilityRole="button"
+          >
+            <Text style={styles.linkText}>Send Feedback</Text>
+            <Text style={styles.linkArrow}>›</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Legal Section */}
@@ -334,7 +364,9 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
 
         {/* Sign Out / Delete Account */}
         {onSignOut && (
-          <View style={styles.section}>
+          <>
+            <Text style={styles.sectionHeader}>Session</Text>
+            <View style={styles.section}>
               <TouchableOpacity
                 style={styles.signOutButton}
                 onPress={onSignOut}
@@ -358,8 +390,15 @@ export default function SettingsScreen({ navigation, onSignOut, context = 'home'
                 This will permanently delete your account. Your game history will be preserved for other players.
               </Text>
             </View>
+          </>
         )}
       </ScrollView>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        visible={showFeedback}
+        onClose={() => setShowFeedback(false)}
+      />
     </View>
   );
 }
@@ -387,7 +426,7 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
     },
     content: {
       padding: 12,
-      paddingBottom: 40,
+      paddingBottom: 24, // Extra spacing at bottom of content
     },
     sectionHeader: {
       fontSize: 14,
@@ -504,6 +543,12 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
       justifyContent: 'space-between',
       alignItems: 'center',
     },
+    aboutRowSeparator: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.divider,
+    },
     aboutLabel: {
       fontSize: 16,
       color: colors.textPrimary,
@@ -511,6 +556,14 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
     aboutValue: {
       fontSize: 16,
       color: colors.textSecondary,
+    },
+    serverProd: {
+      color: colors.success,
+      fontWeight: '600',
+    },
+    serverDev: {
+      color: colors.accent,
+      fontWeight: '600',
     },
     // Legal section links
     linkRow: {
@@ -527,15 +580,13 @@ const createStyles = ({ colors }: ReturnType<typeof useTheme>['theme']) =>
       fontSize: 20,
       color: colors.textSecondary,
     },
-    // Danger zone buttons
+    // Session buttons
     signOutButton: {
-      backgroundColor: colors.buttonSecondary,
+      backgroundColor: colors.surfaceSecondary,
       padding: 14,
       borderRadius: 8,
       alignItems: 'center',
       marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     signOutText: {
       color: colors.textPrimary,

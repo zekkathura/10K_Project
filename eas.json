@@ -14,8 +14,7 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${DEV_SUPABASE_ANON_KEY}"
       },
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug"
+        "buildType": "apk"
       },
       "ios": {
         "simulator": true
@@ -62,8 +61,8 @@
         "track": "internal"
       },
       "ios": {
-        "appleId": "your-apple-id@email.com",
-        "ascAppId": "your-app-store-connect-app-id"
+        "appleId": "tuesdaylabs.dev@gmail.com",
+        "ascAppId": "6757285024"
       }
     }
   }

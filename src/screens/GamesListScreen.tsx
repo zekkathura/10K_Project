@@ -16,7 +16,7 @@ import { getMyGames, joinGameByCode } from '../lib/database';
 import { logger } from '../lib/logger';
 import { Game } from '../lib/types';
 import CreateGameScreen from './CreateGameScreen';
-import { Theme, useThemedStyles } from '../lib/theme';
+import { Theme, useThemedStyles, useTheme } from '../lib/theme';
 
 // Humorous loading messages that cycle every 2 wobble cycles
 const LOADING_MESSAGES = [
@@ -63,6 +63,7 @@ export default function GamesListScreen({
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(() => Math.floor(Math.random() * LOADING_MESSAGES.length));
   const lastCreateTrigger = useRef(createGameTrigger);
   const styles = useThemedStyles(createStyles);
+  const { theme } = useTheme();
 
   // Cycle loading messages every 2 seconds (2 wobble cycles)
   useEffect(() => {
@@ -89,7 +90,7 @@ export default function GamesListScreen({
 
   const completedGames = useMemo(() => {
     return games
-      .filter((game) => game.status === 'ended')
+      .filter((game) => game.status === 'ended' || game.status === 'complete')
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [games]);
 
@@ -182,7 +183,7 @@ export default function GamesListScreen({
         }
       }
     } catch (error) {
-      logger.error('Error loading games:', error);
+      logger.error('Error loading games:', error, { screen: 'GamesListScreen', action: 'loadGames' });
     } finally {
       // Ensure loading shows for at least one full wobble cycle
       const elapsed = Date.now() - loadStartTime;
@@ -293,7 +294,14 @@ export default function GamesListScreen({
                   <Text style={styles.gameDetailText}>📅 {createdDate}</Text>
                   <Text style={styles.gameDetailText}>👥 {(item as any).player_count || 0} players</Text>
                   {winnerName && (
-                    <Text style={styles.winnerText}>🏆 {winnerName}</Text>
+                    <Text
+                      style={styles.winnerText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      maxFontSizeMultiplier={1.2}
+                    >
+                      🏆 {winnerName}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -351,6 +359,7 @@ export default function GamesListScreen({
               value={joinCode}
               onChangeText={setJoinCode}
               placeholder="Enter game code"
+              placeholderTextColor={theme.colors.placeholder}
               autoCapitalize="characters"
               autoCorrect={false}
               maxLength={6}
@@ -491,7 +500,9 @@ const createStyles = ({ colors }: Theme) =>
     },
     gameDetails: {
       flexDirection: 'row',
-      gap: 15,
+      flexWrap: 'wrap',
+      gap: 8,
+      rowGap: 4,
     },
     gameDetailText: {
       fontSize: 13,
@@ -501,6 +512,8 @@ const createStyles = ({ colors }: Theme) =>
       fontSize: 13,
       color: colors.accent,  // Blue accent for winner like UDisc highlights
       fontWeight: '600',
+      flexShrink: 1,
+      maxWidth: '100%',
     },
     emptyContainer: {
       alignItems: 'center',

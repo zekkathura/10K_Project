@@ -169,7 +169,7 @@ export async function signInWithGoogle(): Promise<AuthFunctionResult> {
  */
 export async function signInWithApple(): Promise<AuthFunctionResult> {
   try {
-    // Web: Use Supabase OAuth
+    // Web: Use Supabase OAuth redirect
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -180,21 +180,98 @@ export async function signInWithApple(): Promise<AuthFunctionResult> {
       return { success: true };
     }
 
-    // iOS: Use native Apple Authentication
-    const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
-    });
+    // iOS: Use native Apple Authentication for best UX
+    if (Platform.OS === 'ios') {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
 
-    // Exchange Apple credential for Supabase session
-    const { error } = await supabase.auth.signInWithIdToken({
+      // Exchange Apple credential for Supabase session
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken!,
+      });
+
+      if (error) throw error;
+      return { success: true };
+    }
+
+    // Android: Use browser-based OAuth (similar to Google flow)
+    const redirectTo = getRedirectUrl();
+    logger.debug('Apple Auth (Android) - Starting with redirect:', redirectTo);
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
-      token: credential.identityToken!,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
     });
 
     if (error) throw error;
+
+    if (!data?.url) {
+      return { success: false, error: 'No OAuth URL received' };
+    }
+
+    logger.debug('Opening browser for Apple OAuth');
+
+    // Open browser for authentication
+    let result;
+    try {
+      result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    } catch (browserError) {
+      logger.error('Browser error:', browserError);
+      return { success: false, error: browserError };
+    }
+
+    logger.debug('Browser result type:', result.type);
+
+    if (result.type !== 'success') {
+      return { success: false, error: 'Authentication cancelled' };
+    }
+
+    // Parse tokens from callback URL
+    const { url } = result;
+    const fragmentString = url.split('#')[1];
+
+    if (!fragmentString) {
+      logger.error('No fragment in callback URL');
+      return { success: false, error: 'Invalid callback URL' };
+    }
+
+    const params = new URLSearchParams(fragmentString);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const errorParam = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    if (errorParam) {
+      logger.error(`OAuth error: ${errorParam}`, errorDescription);
+      return { success: false, error: errorDescription || errorParam };
+    }
+
+    if (!accessToken || !refreshToken) {
+      logger.error('Tokens not found in callback');
+      return { success: false, error: 'No authentication tokens received' };
+    }
+
+    logger.debug('Setting session with tokens');
+
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (sessionError) {
+      logger.error('setSession error:', sessionError.message);
+      return { success: false, error: sessionError.message };
+    }
+
+    logger.debug('Apple session set successfully');
     return { success: true };
   } catch (error: any) {
     if (error.code === 'ERR_REQUEST_CANCELED') {
