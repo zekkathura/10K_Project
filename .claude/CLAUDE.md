@@ -20,6 +20,7 @@ Expo SDK 54 (React Native Web) + TypeScript + Supabase (Postgres/Auth/Realtime)
 - `turns` (scores, busts, per round)
 - `app_config` (version requirements, maintenance mode, debug logging control)
 - `error_logs` (production error tracking - insert only, view via Supabase dashboard)
+- `user_feedback` (user feedback submissions with 5/day rate limiting)
 
 **Why We Maintain Verification Scripts:**
 AI assistants lack direct database access. To prevent recommending changes incompatible with actual backend structure, we maintain reference files (`.claude/*.md`) that mirror live database state. User runs verification scripts in Supabase and shares output to keep AI synchronized with reality.

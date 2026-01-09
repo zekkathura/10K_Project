@@ -330,7 +330,9 @@ export default function RulesScreen() {
     if (extraRules.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No extra rules found.</Text>
+          <Text style={styles.emptyText}>
+            No house rules available yet. This section shows example custom rules that players can add to make games more interesting!
+          </Text>
         </View>
       );
     }
@@ -342,6 +344,14 @@ export default function RulesScreen() {
 
     return (
       <View style={styles.extraRulesContainer}>
+        {/* Context Banner */}
+        <View style={styles.contextBanner}>
+          <Text style={styles.contextTitle}>📋 House Rules Examples</Text>
+          <Text style={styles.contextDescription}>
+            These are house rules created by the developer's friend group. Feel free to use them as inspiration for your own games!
+          </Text>
+        </View>
+
         {/* Sort Filters */}
         <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>Sort by:</Text>
@@ -445,7 +455,7 @@ export default function RulesScreen() {
           onPress={() => setActiveTab('extra')}
         >
           <Text style={[styles.tabText, activeTab === 'extra' && styles.tabTextActive]}>
-            Extra Rules
+            House Rules
           </Text>
         </TouchableOpacity>
       </View>
@@ -691,6 +701,24 @@ const createStyles = ({ colors }: Theme) =>
     // Extra Rules
     extraRulesContainer: {
       gap: 12,
+    },
+    contextBanner: {
+      backgroundColor: colors.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+      borderRadius: 12,
+      padding: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.accent,
+    },
+    contextTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      marginBottom: 8,
+    },
+    contextDescription: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
     },
     statsSummary: {
       backgroundColor: colors.surfaceSecondary,

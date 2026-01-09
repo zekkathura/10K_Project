@@ -3,7 +3,7 @@
 **Status:** ⚠️ REFERENCE ONLY - Direct Supabase access available (see SUPABASE_ACCESS.md)
 
 **Source of Truth:** Live Supabase database (query directly via service_role)
-**Last Verified:** 2025-12-14
+**Last Verified:** 2026-01-08 (added user_feedback table)
 
 **Note:** This file is maintained for quick reference. For current schema:
 - Use `node debug_supabase.js` to inspect live data
@@ -145,6 +145,35 @@ ORDER BY created_at DESC;
 
 -- Clear old logs (keep 30 days)
 DELETE FROM error_logs WHERE created_at < NOW() - INTERVAL '30 days';
+```
+
+---
+
+### user_feedback (User feedback submissions)
+```
+id           UUID NOT NULL PK
+user_id      UUID → profiles.id (SET NULL)  -- NULL if user deleted
+email        TEXT NOT NULL
+category     TEXT NOT NULL ('bug', 'feature', 'other')
+message      TEXT NOT NULL (max 1000 chars enforced in app)
+status       TEXT DEFAULT 'new' ('new', 'reviewed', 'archived')
+created_at   TIMESTAMP WITH TIME ZONE NOT NULL
+updated_at   TIMESTAMP WITH TIME ZONE NOT NULL
+```
+
+**RLS:** INSERT with rate limiting (5 per day). Users can SELECT own feedback. No UPDATE/DELETE via API.
+**Rate Limiting:** Backend-enforced via RLS policy (COUNT query in 24-hour window)
+**View feedback:** Supabase Dashboard → Table Editor → user_feedback (service_role only)
+
+**Useful queries (run in SQL Editor):**
+```sql
+-- View all feedback
+SELECT id, email, category, left(message, 50) as message_preview, status, created_at
+FROM user_feedback
+ORDER BY created_at DESC;
+
+-- Delete test submissions (bypass rate limit)
+DELETE FROM user_feedback WHERE user_id = 'your-user-id-here';
 ```
 
 ---
